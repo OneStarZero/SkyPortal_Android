@@ -12,7 +12,8 @@
             --text-sub: #a0a0b0;
             --accent-green: #00ffaa;
             --accent-red: #ff4466;
-            --btn-blue: #3a66ff;
+            --accent-blue: #3a66ff;
+            --accent-gold: #ffaa00;
             --border-radius: 16px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
@@ -32,6 +33,11 @@
         .btn-switch { background: linear-gradient(135deg, #ff4466, #ff8844); display: none; }
         .btn-export { background: linear-gradient(135deg, #f59e0b, #eab308); display: none; color: #000; }
 
+        /* 分类切换栏 */
+        .category-bar { display: none; gap: 10px; margin-bottom: 5px; }
+        .cat-btn { flex: 1; padding: 10px; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #888; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .cat-btn.active { background: rgba(58, 102, 255, 0.2); color: #fff; border-color: var(--accent-blue); }
+
         .list-container { flex: 1; overflow-y: auto; padding: 0 15px 10px 15px; position: relative; }
         .card { background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: var(--border-radius); padding: 16px 20px; margin-bottom: 14px; position: relative; overflow: hidden; transition: transform 0.12s; box-shadow: inset 4px 0 0 0 transparent; }
         .card:active { transform: scale(0.96); }
@@ -39,11 +45,17 @@
         @keyframes slideIn { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
         .card.enabled { box-shadow: inset 4px 0 0 0 var(--accent-green); }
         .card.disabled { box-shadow: inset 4px 0 0 0 var(--accent-red); }
+        .card.other { box-shadow: inset 4px 0 0 0 var(--accent-gold); }
+        
         .card-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; word-break: break-all; }
         .card.enabled .card-title { color: var(--accent-green); }
         .card.disabled .card-title { color: var(--accent-red); }
+        .card.other .card-title { color: var(--accent-gold); }
+        
         .card-level { font-size: 14px; color: #d0d0d5; margin-bottom: 10px; display: flex; }
         .card-level::before { content: "目的地"; font-size: 12px; background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 4px; margin-right: 8px; height: fit-content; }
+        .card.other .card-level { display: none; } /* 其他实体不显示目的地 */
+        
         .card-coord { font-size: 13px; font-family: monospace; color: #888; background: rgba(0, 0, 0, 0.3); padding: 6px 10px; border-radius: 8px; display: inline-block; }
         .card-coord span { color: #fff; font-weight: 600; }
 
@@ -88,20 +100,26 @@
         <button class="btn-import btn-apk" id="importApkBtn">📱 读取已安装应用 (光遇)</button>
         <button class="btn-import btn-switch" id="switchMapBtn">🔄 切换地图关卡</button>
         <button class="btn-import btn-export" id="exportJsonBtn">💾 保存导出当前 JSON</button>
+        
+        <!-- 分类切换 -->
+        <div class="category-bar" id="categoryBar">
+            <button class="cat-btn active" id="catTeleport">🚪 传送点</button>
+            <button class="cat-btn" id="catOther">📦 其他实体</button>
+        </div>
     </div>
 
     <div class="list-container" id="listContainer"></div>
 
     <div class="search-bar" id="searchBar">
         <div class="search-input-wrap">
-            <input type="text" id="searchInput" placeholder="搜索传送点或目的地...">
+            <input type="text" id="searchInput" placeholder="搜索名称或目的地...">
             <button class="btn-clear" id="btnClear">×</button>
         </div>
     </div>
 
     <div class="tabs" id="tabs">
-        <button class="tab-btn active-avail" id="tabAvail">可用传送点 (0)</button>
-        <button class="tab-btn" id="tabDis">禁用传送点 (0)</button>
+        <button class="tab-btn active-avail" id="tabAvail">可用 (0)</button>
+        <button class="tab-btn" id="tabDis">禁用 (0)</button>
     </div>
 
     <div class="toast" id="toast">已复制到剪贴板！</div>
@@ -120,7 +138,6 @@
 
     <script>
         const GITHUB_ONLINE_DICT_URL = "https://raw.githubusercontent.com/OneStarZero/Sky-Portal-preview/refs/heads/main/online_dict.json"; 
-        
         const LOCAL_TRANSLATIONS = {
             "CandleSpace": "遇境", "Dawn": "晨岛", "StormEvent_VoidSpace": "暴风眼·虚空空间", "MainStreet": "云巢", "MainStreetFlyingIntro": "云巢·飞行引导", "MainStreet_ShopOutfits": "云巢·服装店", "MainStreet_ShopSpells": "云巢·魔法商店", "MainStreet_ShopProps": "云巢·道具店", "MainStreet_Apartment": "云巢·公寓", "MainStreet_Cafe": "云巢·咖啡厅", "MainStreet_ConcertHall": "云巢·音乐堂", "MainStreet_FunArmada": "云巢·游乐场", "MainStreet_Soundbath": "云巢·声音浴", "MainStreet_Cafe_Wonderland": "云巢·仙境咖啡厅", "MainStreet_StorySpace": "云巢·故事空间", "Event_Cinema": "活动·剧场", "Night_IPHallway": "禁阁·走廊", "Prairie_ButterflyFields": "云野·蝴蝶平原", "Prairie_Cave": "云野·洞穴", "Prairie_NestAndKeeper": "云野·鸟巢与圣岛", "Prairie_Island": "云野·圣岛", "Prairie_Village": "云野·三塔图", "Prairie_WildLifePark": "云野·野生动物园", "DayHubCave": "白日中心洞穴", "DayEnd": "晨岛·终点", "Rain": "雨林", "RainForest": "雨林", "RainMid": "雨林·中段", "RainShelter": "雨林·树屋", "Rain_Cave": "雨林·洞穴", "Rain_BaseCamp": "雨林·营地", "RainEnd": "雨林·终点", "Skyway": "云道", "Sunset": "霞谷", "SunsetRace": "霞谷·赛道", "Sunset_Citadel": "霞谷·霞光城", "Sunset_FlyRace": "霞谷·飞行赛道", "SunsetEnd": "霞谷·终点", "SunsetColosseum": "霞谷·竞技场", "SunsetEnd2": "霞谷·终点深处", "SunsetVillage": "霞谷·村落", "SunsetVillage_MusicShop": "霞谷·音乐商店", "Sunset_YetiPark": "霞谷·隐士山谷", "Sunset_Theater": "霞谷·圆梦村剧场", "Event_HidenSeek_SnowVillage": "活动·捉迷藏雪村", "DuskStart": "暮土·起点", "Dusk": "暮土", "Dusk_Triangle": "暮土·三角地带", "Dusk_TriangleEnd": "暮土·三角终点", "DuskOasis": "暮土·绿洲", "DuskGraveyard": "暮土·四龙图", "Dusk_CrabField": "暮土·螃蟹田", "DuskMid": "暮土·中段", "DuskEnd": "暮土·终点", "Nintendo_CandleSpace": "任天堂遇境", "Event_WerewolfGame": "活动·狼人杀", "Night": "禁阁", "NightArchive": "禁阁·档案馆", "Night2": "禁阁(二层)", "NightEnd": "禁阁·终点", "TGCOffice": "TGC办公室", "Event_Personality": "活动·性格测试", "VoidSharedSpace": "虚空共享空间", "Event_DaysOfMischief": "活动·恶作剧之日", "Event_DaysOfMischief_Escape": "活动·恶作剧逃脱", "UndergroundOffice": "地下办公室", "DawnCave": "晨岛·洞穴", "Dawn_TrialsWater": "晨岛·水之试炼", "Dawn_TrialsEarth": "晨岛·地之试炼", "Dawn_TrialsAir": "晨岛·风之试炼", "Dawn_TrialsFire": "晨岛·火之试炼", "NightDesert": "禁阁·星漠", "NightDesert_Planets": "禁阁·星漠行星", "NightDesert_Beach": "禁阁·星漠海滩", "Night_InfiniteDesert": "禁阁·无尽沙漠", "Night_JarCave": "禁阁·罐子洞穴", "Night_Shelter": "禁阁·庇护所", "Event_Arr_Runaway": "欧若拉·逃跑", "Event_Arr_SoftInside": "欧若拉·柔软内心", "Event_Arr_Warrior": "欧若拉·战士", "Event_Arr_TheSeed": "欧若拉·种子", "Event_Arr_EyesOfAChild": "欧若拉·孩童之眼", "Event_Arr_ExhaleInhale": "欧若拉·呼吸", "Night_PaintedWorld": "禁阁·彩绘世界", "Event_DaysOfMoonlight_HugeMoon": "活动·月光日(巨月)", "Season24Void1": "第24赛季虚空", "Night_StoryBook": "禁阁·故事书", "Night_ValleyForest": "禁阁·山谷森林", "Night_ValleyHouse": "禁阁·山谷房屋", "Night_ValleyHouseSky": "禁阁·山谷天空", "Rain_BlueBirdTheater": "雨林·青鸟剧场", "DuskMid_Past": "暮土·中段(废弃)", "DuskMid_PastMarket": "暮土·中段废弃集市", "Dusk_HiddenTemple": "暮土·隐藏神庙", "DuskEnd_Past": "暮土·终点(废弃)", "Night_Jumble": "禁阁·杂物间", "Night_Workshop": "禁阁·工作室", "Night_GO_City": "云巢·竞速城市", "Night_GO_Farm": "云巢·竞速农场", "Night_GO_Field": "云巢·竞速田野", "Night_GO_Gallery": "云巢·竞速画廊", "Night_GO_Island": "云巢·竞速岛屿", "Nest_Night_GO_Town": "云巢·竞速家园", "Night_GO_Town": "云巢·竞速小镇", "Night_GO_Tree": "云巢·竞速树木", "Dusk_PearlIsland": "暮土·珍珠岛", "Dusk_PearlSea": "暮土·珍珠海", "StormStart": "暴风眼·起点", "Storm": "暴风眼", "StormEnd": "暴风眼·终点", "OrbitMid": "重生之路·中段", "OrbitEnd": "伊甸之眼(终点)", "CandleSpaceEnd": "遇境·终点", "Credits": "制作人员名单", "AR_TestLevel": "AR·测试关卡", "AR_WheatField": "AR·麦田", "AR_Bedroom": "AR·卧室", "WorldEmpty": "空世界"
         };
@@ -282,7 +299,11 @@
         }
 
         // 2. 业务逻辑与状态缓存
-        let parsedData = { enabled: [], disabled: [] };
+        let parsedData = {
+            teleports: { enabled: [], disabled: [] },
+            others: []
+        };
+        let currentCategory = 'teleport'; // teleport 或 other
         let currentTab = 'enabled';
         let cachedLevels = []; 
         let currentJsonData = null; 
@@ -305,6 +326,10 @@
         const nativeAppModal = document.getElementById('nativeAppModal');
         const appListContainer = document.getElementById('appList');
         const modalTitle = document.getElementById('modalTitle');
+
+        const categoryBar = document.getElementById('categoryBar');
+        const catTeleport = document.getElementById('catTeleport');
+        const catOther = document.getElementById('catOther');
 
         document.body.addEventListener('touchstart', initAudio, { once: true, passive: true });
         document.body.addEventListener('mousedown', initAudio, { once: true });
@@ -464,152 +489,132 @@
             importApkBtn.style.display = "none";
             switchMapBtn.style.display = "block";
             exportJsonBtn.style.display = "block";
+            categoryBar.style.display = "flex";
 
-            extractTeleportsFromJson(jsonData, levelName);
+            extractAndClassifyNodes(jsonData, levelName);
         }
 
         // =====================================================================
-        // 🌟 3. 终极节点解析引擎 (双向交叉匹配)
+        // 3. 终极节点解析引擎 (分类过滤)
         // =====================================================================
-        function extractTeleportsFromJson(jsonData, levelName = "") { 
-            parsedData.enabled = [];
-            parsedData.disabled = [];
+        function extractAndClassifyNodes(jsonData, levelName = "") { 
+            parsedData.teleports.enabled = [];
+            parsedData.teleports.disabled = [];
+            parsedData.others = [];
+            
             const bstNodes = jsonData.BSTNodes || {};
             
-            const processedKeys = new Set(); // 记录已生成卡片的节点，避免重复
-
-            // 辅助函数：从实体节点和被引用的数据节点中榨取坐标与名字
-            function processLinkNode(parentNode, parentKey, linkData, dataKey) {
-                if (!linkData || typeof linkData !== 'object') return;
-
-                // 如果有深层嵌套的引用（极少情况），继续解开
-                if (linkData.LevelLink && typeof linkData.LevelLink === 'object') {
-                    linkData = linkData.LevelLink;
-                }
-
-                let tf = linkData.transform || linkData.Transform;
-                if (!tf) return; // 没坐标就不算传送点
-
-                // 1. 提取坐标
-                let mx = 0, my = 0, mz = 0;
-                try {
-                    if (Array.isArray(tf) && tf.length >= 4) {
-                        mx = parseFloat(tf[3][0]); my = parseFloat(tf[3][1]); mz = parseFloat(tf[3][2]);
-                        if (mx === 0 && my === 0 && mz === 0) {
-                            mx = parseFloat(tf[0][3]); my = parseFloat(tf[1][3]); mz = parseFloat(tf[2][3]);
-                        }
-                    } else if (tf && typeof tf === 'object' && tf.pos) {
-                        mx = parseFloat(tf.pos.x || tf.pos[0] || 0);
-                        my = parseFloat(tf.pos.y || tf.pos[1] || 0);
-                        mz = parseFloat(tf.pos.z || tf.pos[2] || 0);
-                    }
-                } catch (e) { }
-                if (isNaN(mx)) mx = 0;
-
-                // 2. 提取名称与目的地（从数据节点或者父实体节点中找）
-                let targetLevelRaw = linkData.levelName || linkData.LevelName || parentNode.levelName || parentNode.LevelName;
-                let targetNameRaw = linkData.linkName || linkData.LinkName || parentNode.linkName || parentNode.LinkName || parentKey;
-
-                // 3. 提取启用状态（从数据节点或者父实体节点中找）
-                let isEnabled = (
-                    linkData.enabled === true || linkData.enabled === 1 || linkData.enabled === "true" || linkData.enabled === "True" || linkData.Enabled === true ||
-                    parentNode.enabled === true || parentNode.enabled === 1 || parentNode.enabled === "true" || parentNode.enabled === "True"
-                );
-
-                let item = { 
-                    name: targetNameRaw, 
-                    level: translateLevel(targetLevelRaw || "未知"), 
-                    x: mx.toFixed(1), 
-                    z: my.toFixed(1), 
-                    y: mz.toFixed(1) 
-                };
-
-                // 去重
-                let isDuplicate = (parsedData.enabled.concat(parsedData.disabled)).some(existing => 
-                    existing.name === item.name && existing.x === item.x && existing.z === item.z && existing.y === item.y
-                );
-                if (isDuplicate) return;
-
-                processedKeys.add(dataKey);
-                processedKeys.add(parentKey);
-
-                if (isEnabled) parsedData.enabled.push(item);
-                else parsedData.disabled.push(item);
-            }
-
-            // 🌟 第一步：处理所有有关联的节点
             for (let key in bstNodes) {
                 let node = bstNodes[key];
                 if (!node || typeof node !== 'object') continue;
 
+                // 查找可能包含数据的壳
                 let linkRef = node.LevelLink || node['[CLUMP]LevelLink'];
                 if (!linkRef) continue;
 
-                // 兼容数组和单个对象
                 let links = Array.isArray(linkRef) ? linkRef : [linkRef];
                 
                 for (let i = 0; i < links.length; i++) {
                     let linkItem = links[i];
+                    let linkData = null;
+                    let sourceNode = node; // 默认数据源是外层节点
                     
-                    // 情况 A：当前节点存的是一个引用字符串（比如 "BstNode_209..."）
+                    // 解引用
                     if (typeof linkItem === 'string' && bstNodes[linkItem]) {
-                        let targetNode = bstNodes[linkItem];
-                        // 目标节点里面可能是直接的 LevelLink 数据，也可能还要套一层
-                        let targetData = targetNode.LevelLink || targetNode['[CLUMP]LevelLink'] || targetNode;
-                        processLinkNode(node, key, targetData, linkItem);
-                    } 
-                    // 情况 B：数据直接嵌套在对象里
-                    else if (typeof linkItem === 'object') {
-                        processLinkNode(node, key, linkItem, key);
+                        linkData = bstNodes[linkItem].LevelLink || bstNodes[linkItem]['[CLUMP]LevelLink'] || bstNodes[linkItem];
+                        sourceNode = bstNodes[linkItem];
+                    } else if (typeof linkItem === 'object') {
+                        linkData = linkItem.LevelLink || linkItem['[CLUMP]LevelLink'] || linkItem;
+                    }
+
+                    if (!linkData || typeof linkData !== 'object') continue;
+
+                    let tf = linkData.transform || linkData.Transform;
+                    if (!tf) continue;
+
+                    // 1. 提取坐标
+                    let mx = 0, my = 0, mz = 0;
+                    try {
+                        if (Array.isArray(tf) && tf.length >= 4) {
+                            mx = parseFloat(tf[3][0]); my = parseFloat(tf[3][1]); mz = parseFloat(tf[3][2]);
+                            if (mx === 0 && my === 0 && mz === 0) {
+                                mx = parseFloat(tf[0][3]); my = parseFloat(tf[1][3]); mz = parseFloat(tf[2][3]);
+                            }
+                        } else if (tf && typeof tf === 'object' && tf.pos) {
+                            mx = parseFloat(tf.pos.x || tf.pos[0] || 0);
+                            my = parseFloat(tf.pos.y || tf.pos[1] || 0);
+                            mz = parseFloat(tf.pos.z || tf.pos[2] || 0);
+                        }
+                    } catch (e) { }
+                    if (isNaN(mx)) mx = 0;
+
+                    // 2. 提取名字与目的地
+                    let targetLevel = linkData.levelName || linkData.LevelName || sourceNode.levelName || sourceNode.LevelName || node.levelName || node.LevelName;
+                    let targetName = linkData.linkName || linkData.LinkName || sourceNode.linkName || sourceNode.LinkName || node.linkName || node.LinkName || key;
+                    
+                    let isEnabled = linkData.enabled === true || linkData.enabled === 1 || linkData.Enabled === true || sourceNode.enabled === true || node.enabled === true;
+
+                    let item = { 
+                        name: targetName, 
+                        level: translateLevel(targetLevel || "未知"), 
+                        x: mx.toFixed(1), 
+                        z: my.toFixed(1), 
+                        y: mz.toFixed(1) 
+                    };
+
+                    // 3. 核心分类逻辑
+                    if (targetLevel) {
+                        // 有 levelName 的绝对是传送点
+                        if (isEnabled) parsedData.teleports.enabled.push(item);
+                        else parsedData.teleports.disabled.push(item);
+                    } else {
+                        // 没有 levelName 的归入其他实体
+                        parsedData.others.push(item);
                     }
                 }
             }
 
-            // 🌟 第二步：处理没有被任何实体节点引用的“孤儿” LevelLink 节点
-            // (防止有些隐藏传送点没被触发，但也存在于文件中)
-            for (let key in bstNodes) {
-                if (processedKeys.has(key)) continue; // 已处理过
-                
-                let node = bstNodes[key];
-                if (!node || typeof node !== 'object') continue;
+            // 去重
+            parsedData.others = parsedData.others.filter((v, i, a) => a.findIndex(t => t.x === v.x && t.z === v.z && t.name === v.name) === i);
 
-                // 如果它自己就是一个 LevelLink 节点（包含了 transform 和 enabled）
-                let isLinkNode = (node.transform || node.Transform) && (node.enabled !== undefined);
-                
-                if (isLinkNode) {
-                    processLinkNode({}, key, node, key);
-                }
-            }
-
-            // 渲染 UI
             searchBar.style.display = "block";
             tabs.style.display = "flex";
-            tabAvail.innerText = `可用 (${parsedData.enabled.length})`;
-            tabDis.innerText = `禁用 (${parsedData.disabled.length})`;
+            categoryBar.style.display = "flex";
 
-            if (parsedData.enabled.length === 0 && parsedData.disabled.length === 0) {
-                listContainer.innerHTML = `
-                    <div style="text-align:center; color:#aaa; margin-top:50px; line-height:2;">
-                        当前地图 <b>[${translateLevel(levelName)}]</b><br>
-                        没有找到有效的传送点数据。<br>
-                        <span style="font-size:12px;color:#666;">您可以导出 JSON 查看原始结构，或切换地图尝试。</span>
-                    </div>`;
-                return;
-            }
-
-            switchTab('enabled');
+            switchCategory('teleport');
         }
 
-        // =====================================================================
-        // UI 渲染逻辑
-        // =====================================================================
+        // 分类切换事件
+        catTeleport.addEventListener('click', () => { playSound('tap'); switchCategory('teleport'); });
+        catOther.addEventListener('click', () => { playSound('tap'); switchCategory('other'); });
+
+        function switchCategory(cat) {
+            currentCategory = cat;
+            if (cat === 'teleport') {
+                catTeleport.className = "cat-btn active";
+                catOther.className = "cat-btn";
+                tabs.style.display = "flex";
+                switchTab('enabled');
+            } else {
+                catTeleport.className = "cat-btn";
+                catOther.className = "cat-btn active";
+                tabs.style.display = "none";
+                renderList(); // 直接渲染 others
+            }
+        }
+
+        // 原来的 tab 切换
         tabAvail.addEventListener('click', () => { playSound('tab'); switchTab('enabled'); });
         tabDis.addEventListener('click', () => { playSound('tab'); switchTab('disabled'); });
 
         function switchTab(type) {
+            if (currentCategory !== 'teleport') return;
             currentTab = type;
             if (type === 'enabled') { tabAvail.className = "tab-btn active-avail"; tabDis.className = "tab-btn"; } 
             else { tabAvail.className = "tab-btn"; tabDis.className = "tab-btn active-dis"; }
+            
+            tabAvail.innerText = `可用 (${parsedData.teleports.enabled.length})`;
+            tabDis.innerText = `禁用 (${parsedData.teleports.disabled.length})`;
             renderList();
         }
 
@@ -619,18 +624,31 @@
 
         function renderList() {
             const fragment = document.createDocumentFragment();
-            let sourceData = currentTab === 'enabled' ? parsedData.enabled : parsedData.disabled;
+            let sourceData = [];
+            let cssClass = '';
+
+            if (currentCategory === 'teleport') {
+                sourceData = currentTab === 'enabled' ? parsedData.teleports.enabled : parsedData.teleports.disabled;
+                cssClass = currentTab;
+            } else {
+                sourceData = parsedData.others;
+                cssClass = 'other';
+            }
+
             let keyword = searchInput.value.trim().toLowerCase();
             if (keyword) sourceData = sourceData.filter(item => item.name.toLowerCase().includes(keyword) || item.level.toLowerCase().includes(keyword));
 
-            if (sourceData.length === 0) { listContainer.innerHTML = `<div style="text-align:center; color:#666; margin-top:50px;">当前分类下没有传送点</div>`; return; }
+            if (sourceData.length === 0) { 
+                listContainer.innerHTML = `<div style="text-align:center; color:#666; margin-top:50px;">当前分类下没有数据</div>`; 
+                return; 
+            }
 
             sourceData.forEach((item, index) => {
                 let card = document.createElement('div');
-                card.className = `card ${currentTab} card-anim`;
+                card.className = `card ${cssClass} card-anim`;
                 card.style.animationDelay = `${Math.min(index * 0.015, 0.3)}s`; 
                 card.innerHTML = `
-                    <div class="card-title">[${currentTab === 'enabled' ? '可用' : '不可用'}] ${item.name}</div>
+                    <div class="card-title">${currentCategory === 'teleport' ? `[${cssClass === 'enabled' ? '可用' : '不可用'}]` : '[其他实体]'} ${item.name}</div>
                     <div class="card-level">${item.level}</div>
                     <div class="card-coord">X <span>${item.x}</span> | Z <span>${item.z}</span> | Y <span>${item.y}</span></div>
                 `;
@@ -662,7 +680,10 @@
         }
 
         function copyToClipboard(item) {
-            const text = `${item.name} | 目的地: ${item.level} | 坐标: X ${item.x}, Z ${item.z}, Y ${item.y}`;
+            let text = `${item.name} | 坐标: X ${item.x}, Z ${item.z}, Y ${item.y}`;
+            if (currentCategory === 'teleport') {
+                text = `${item.name} | 目的地: ${item.level} | 坐标: X ${item.x}, Z ${item.z}, Y ${item.y}`;
+            }
             if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(showToast);
             else {
                 let textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed";
