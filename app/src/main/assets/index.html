@@ -87,7 +87,7 @@
         <input type="file" id="fileInput" accept="*/*" style="display: none;">
         <button class="btn-import btn-apk" id="importApkBtn">📱 读取已安装应用 (光遇)</button>
         <button class="btn-import btn-switch" id="switchMapBtn">🔄 切换地图关卡</button>
-        <button class="btn-import btn-export" id="exportJsonBtn">💾 导出当前地图 JSON</button>
+        <button class="btn-import btn-export" id="exportJsonBtn">💾 保存导出当前 JSON</button>
     </div>
 
     <div class="list-container" id="listContainer"></div>
@@ -172,6 +172,7 @@
             }
         }
 
+        // 1. 核心 JS 二进制解析引擎
         class SkyBinaryParser {
             constructor(buffer) { this.buffer = buffer; this.view = new DataView(buffer); this.offset = 0; this.textDecoder = new TextDecoder('utf-8'); }
             readUint8() { const v = this.view.getUint8(this.offset); this.offset += 1; return v; }
@@ -280,11 +281,12 @@
             }
         }
 
+        // 2. 业务逻辑与状态缓存
         let parsedData = { enabled: [], disabled: [] };
         let currentTab = 'enabled';
         let cachedLevels = []; 
-        let currentJsonData = null; // 缓存当前解析的 JSON
-        let currentLevelName = ""; // 缓存当前地图名
+        let currentJsonData = null; 
+        let currentLevelName = ""; 
 
         const importBtn = document.getElementById('importBtn');
         const fileInput = document.getElementById('fileInput');
@@ -321,10 +323,7 @@
             reader.onload = (event) => { 
                 try { 
                     const json = JSON.parse(event.target.result);
-                    currentJsonData = json;
-                    currentLevelName = file.name.replace('.json','');
-                    exportJsonBtn.style.display = "block"; // 显示导出按钮
-                    processData(json, currentLevelName); 
+                    applyJsonData(json, file.name.replace('.json',''));
                     playSound('success'); 
                     importBtn.innerText = "📂 导入光遇 JSON 文件"; 
                 } 
@@ -355,18 +354,15 @@
             }
         });
 
-        // 🌟 核心新增：独立导出按钮事件
         exportJsonBtn.addEventListener('click', () => {
             if (!currentJsonData || !currentLevelName) return;
             playSound('tap');
             const jsonStr = JSON.stringify(currentJsonData, null, 2);
             const fileName = currentLevelName + "_Objects.level.json";
             
-            // 如果是在原生 App 中，调用原生保存文件（弹出目录选择器）
             if (window.AndroidNative && window.AndroidNative.exportJson) {
                 window.AndroidNative.exportJson(fileName, jsonStr);
             } else {
-                // 如果在浏览器测试，降级为普通下载
                 const blob = new Blob([jsonStr], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -451,14 +447,7 @@
                 const parser = new SkyBinaryParser(bytes.buffer);
                 const jsonData = parser.parse();
 
-                currentJsonData = jsonData;
-                currentLevelName = levelName;
-
-                importApkBtn.style.display = "none";
-                switchMapBtn.style.display = "block";
-                exportJsonBtn.style.display = "block"; // 🌟 显示导出按钮
-
-                processData(jsonData, levelName);
+                applyJsonData(jsonData, levelName);
                 playSound('success');
 
             } catch (err) {
@@ -468,68 +457,131 @@
             }
         };
 
+        function applyJsonData(jsonData, levelName) {
+            currentJsonData = jsonData;
+            currentLevelName = levelName;
+
+            importApkBtn.style.display = "none";
+            switchMapBtn.style.display = "block";
+            exportJsonBtn.style.display = "block";
+
+            extractTeleportsFromJson(jsonData, levelName);
+        }
+
         // =====================================================================
-        // 核心数据处理：彻底解决 LevelLink 遗漏问题
+        // 🌟 3. 终极节点解析引擎 (双向交叉匹配)
         // =====================================================================
-        function processData(data, levelName = "") { 
+        function extractTeleportsFromJson(jsonData, levelName = "") { 
             parsedData.enabled = [];
             parsedData.disabled = [];
-            const bstNodes = data.BSTNodes || {};
+            const bstNodes = jsonData.BSTNodes || {};
+            
+            const processedKeys = new Set(); // 记录已生成卡片的节点，避免重复
 
+            // 辅助函数：从实体节点和被引用的数据节点中榨取坐标与名字
+            function processLinkNode(parentNode, parentKey, linkData, dataKey) {
+                if (!linkData || typeof linkData !== 'object') return;
+
+                // 如果有深层嵌套的引用（极少情况），继续解开
+                if (linkData.LevelLink && typeof linkData.LevelLink === 'object') {
+                    linkData = linkData.LevelLink;
+                }
+
+                let tf = linkData.transform || linkData.Transform;
+                if (!tf) return; // 没坐标就不算传送点
+
+                // 1. 提取坐标
+                let mx = 0, my = 0, mz = 0;
+                try {
+                    if (Array.isArray(tf) && tf.length >= 4) {
+                        mx = parseFloat(tf[3][0]); my = parseFloat(tf[3][1]); mz = parseFloat(tf[3][2]);
+                        if (mx === 0 && my === 0 && mz === 0) {
+                            mx = parseFloat(tf[0][3]); my = parseFloat(tf[1][3]); mz = parseFloat(tf[2][3]);
+                        }
+                    } else if (tf && typeof tf === 'object' && tf.pos) {
+                        mx = parseFloat(tf.pos.x || tf.pos[0] || 0);
+                        my = parseFloat(tf.pos.y || tf.pos[1] || 0);
+                        mz = parseFloat(tf.pos.z || tf.pos[2] || 0);
+                    }
+                } catch (e) { }
+                if (isNaN(mx)) mx = 0;
+
+                // 2. 提取名称与目的地（从数据节点或者父实体节点中找）
+                let targetLevelRaw = linkData.levelName || linkData.LevelName || parentNode.levelName || parentNode.LevelName;
+                let targetNameRaw = linkData.linkName || linkData.LinkName || parentNode.linkName || parentNode.LinkName || parentKey;
+
+                // 3. 提取启用状态（从数据节点或者父实体节点中找）
+                let isEnabled = (
+                    linkData.enabled === true || linkData.enabled === 1 || linkData.enabled === "true" || linkData.enabled === "True" || linkData.Enabled === true ||
+                    parentNode.enabled === true || parentNode.enabled === 1 || parentNode.enabled === "true" || parentNode.enabled === "True"
+                );
+
+                let item = { 
+                    name: targetNameRaw, 
+                    level: translateLevel(targetLevelRaw || "未知"), 
+                    x: mx.toFixed(1), 
+                    z: my.toFixed(1), 
+                    y: mz.toFixed(1) 
+                };
+
+                // 去重
+                let isDuplicate = (parsedData.enabled.concat(parsedData.disabled)).some(existing => 
+                    existing.name === item.name && existing.x === item.x && existing.z === item.z && existing.y === item.y
+                );
+                if (isDuplicate) return;
+
+                processedKeys.add(dataKey);
+                processedKeys.add(parentKey);
+
+                if (isEnabled) parsedData.enabled.push(item);
+                else parsedData.disabled.push(item);
+            }
+
+            // 🌟 第一步：处理所有有关联的节点
             for (let key in bstNodes) {
                 let node = bstNodes[key];
-                if (!node) continue;
+                if (!node || typeof node !== 'object') continue;
 
-                // 兼容 LevelLink 和 Clump 引用的 LevelLink
-                let linkData = node.LevelLink || node['[CLUMP]LevelLink'];
-                if (!linkData) continue;
-                
-                let links = Array.isArray(linkData) ? linkData : [linkData];
+                let linkRef = node.LevelLink || node['[CLUMP]LevelLink'];
+                if (!linkRef) continue;
+
+                // 兼容数组和单个对象
+                let links = Array.isArray(linkRef) ? linkRef : [linkRef];
                 
                 for (let i = 0; i < links.length; i++) {
-                    let link = links[i];
+                    let linkItem = links[i];
                     
-                    // 解包多层嵌套
-                    if (link && link.LevelLink) link = link.LevelLink;
-                    if (Array.isArray(link)) link = link[0];
-                    if (!link) continue;
-
-                    let mx = 0, my = 0, mz = 0;
-                    let tf = link.transform || link.Transform; // 兼容大小写
-                    try {
-                        if (Array.isArray(tf) && tf.length >= 4) {
-                            mx = parseFloat(tf[3][0]); my = parseFloat(tf[3][1]); mz = parseFloat(tf[3][2]);
-                            if (mx === 0 && my === 0 && mz === 0) {
-                                mx = parseFloat(tf[0][3]); my = parseFloat(tf[1][3]); mz = parseFloat(tf[2][3]);
-                            }
-                        } else if (tf && tf.pos) {
-                            mx = parseFloat(tf.pos.x || tf.pos[0] || 0);
-                            my = parseFloat(tf.pos.y || tf.pos[1] || 0);
-                            mz = parseFloat(tf.pos.z || tf.pos[2] || 0);
-                        }
-                    } catch (e) { }
-
-                    if (isNaN(mx)) mx = 0;
-
-                    let translatedLevel = translateLevel(link.levelName || "未知");
-                    let displayName = link.linkName || key;
-                    if (links.length > 1) displayName += ` [${i+1}]`;
-
-                    let item = { 
-                        name: displayName, 
-                        level: translatedLevel, 
-                        x: mx.toFixed(1), 
-                        z: my.toFixed(1), 
-                        y: mz.toFixed(1) 
-                    };
-
-                    let isEnabled = (link.enabled === true || link.enabled === 1 || link.enabled === "true" || link.enabled === "True" || link.Enabled === true);
-                    
-                    if (isEnabled) parsedData.enabled.push(item);
-                    else parsedData.disabled.push(item);
+                    // 情况 A：当前节点存的是一个引用字符串（比如 "BstNode_209..."）
+                    if (typeof linkItem === 'string' && bstNodes[linkItem]) {
+                        let targetNode = bstNodes[linkItem];
+                        // 目标节点里面可能是直接的 LevelLink 数据，也可能还要套一层
+                        let targetData = targetNode.LevelLink || targetNode['[CLUMP]LevelLink'] || targetNode;
+                        processLinkNode(node, key, targetData, linkItem);
+                    } 
+                    // 情况 B：数据直接嵌套在对象里
+                    else if (typeof linkItem === 'object') {
+                        processLinkNode(node, key, linkItem, key);
+                    }
                 }
             }
 
+            // 🌟 第二步：处理没有被任何实体节点引用的“孤儿” LevelLink 节点
+            // (防止有些隐藏传送点没被触发，但也存在于文件中)
+            for (let key in bstNodes) {
+                if (processedKeys.has(key)) continue; // 已处理过
+                
+                let node = bstNodes[key];
+                if (!node || typeof node !== 'object') continue;
+
+                // 如果它自己就是一个 LevelLink 节点（包含了 transform 和 enabled）
+                let isLinkNode = (node.transform || node.Transform) && (node.enabled !== undefined);
+                
+                if (isLinkNode) {
+                    processLinkNode({}, key, node, key);
+                }
+            }
+
+            // 渲染 UI
             searchBar.style.display = "block";
             tabs.style.display = "flex";
             tabAvail.innerText = `可用 (${parsedData.enabled.length})`;
@@ -539,7 +591,7 @@
                 listContainer.innerHTML = `
                     <div style="text-align:center; color:#aaa; margin-top:50px; line-height:2;">
                         当前地图 <b>[${translateLevel(levelName)}]</b><br>
-                        没有找到带有 LevelLink 的传送点。<br>
+                        没有找到有效的传送点数据。<br>
                         <span style="font-size:12px;color:#666;">您可以导出 JSON 查看原始结构，或切换地图尝试。</span>
                     </div>`;
                 return;
@@ -548,6 +600,9 @@
             switchTab('enabled');
         }
 
+        // =====================================================================
+        // UI 渲染逻辑
+        // =====================================================================
         tabAvail.addEventListener('click', () => { playSound('tab'); switchTab('enabled'); });
         tabDis.addEventListener('click', () => { playSound('tab'); switchTab('disabled'); });
 
