@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>SkyPortal</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0c;
+            --card-bg: rgba(28, 28, 35, 0.85);
+            --text-main: #ffffff;
+            --text-sub: #a0a0b0;
+            --accent-green: #00ffaa;
+            --accent-red: #ff4466;
+            --btn-blue: #3a66ff;
+            --border-radius: 16px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        html, body {
+            height: 100%; overflow: hidden; background-color: var(--bg-color); color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none; display: flex; flex-direction: column; transform: translate3d(0, 0, 0); -webkit-overflow-scrolling: touch;
+        }
+
+        /* 极光背景 */
+        .aurora-bg { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0.4; }
+        .aurora-blob { position: absolute; border-radius: 50%; filter: blur(40px); animation: float 20s infinite alternate ease-in-out; will-change: transform; transform: translate3d(0, 0, 0); }
+        .blob-1 { width: 200px; height: 200px; background: #00ffaa; top: -5%; left: -5%; }
+        .blob-2 { width: 250px; height: 250px; background: #3a66ff; bottom: 5%; right: -10%; animation-delay: -7s; }
+        @keyframes float { 0% { transform: translate3d(0, 0, 0) scale(1); } 100% { transform: translate3d(40px, 60px, 0) scale(1.1); } }
+
+        /* 顶部栏 */
+        .top-bar { flex-shrink: 0; padding: 15px 15px 10px 15px; padding-top: max(15px, env(safe-area-inset-top)); z-index: 10; display: flex; flex-direction: column; gap: 10px; }
+        .btn-import { width: 100%; background: linear-gradient(135deg, #3a66ff, #6a33ff); color: white; border: none; padding: 16px; font-size: 16px; font-weight: bold; border-radius: var(--border-radius); box-shadow: 0 4px 10px rgba(58, 102, 255, 0.2); transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1); transform: translate3d(0, 0, 0); }
+        .btn-import:active { transform: scale(0.95) translate3d(0, 0, 0); }
+        .btn-apk { background: linear-gradient(135deg, #00b09b, #96c93d); box-shadow: 0 4px 10px rgba(0, 176, 155, 0.2); }
+
+        /* 核心列表区 */
+        .list-container { flex: 1; overflow-y: auto; padding: 0 15px 10px 15px; position: relative; }
+        .card { background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: var(--border-radius); padding: 16px 20px; margin-bottom: 14px; position: relative; overflow: hidden; transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); transform: translate3d(0, 0, 0); will-change: transform; box-shadow: inset 4px 0 0 0 transparent; }
+        .card:active { transform: scale(0.96) translate3d(0, 0, 0); background: rgba(40, 40, 50, 0.9); }
+        @keyframes slideIn { 0% { opacity: 0; transform: translate3d(0, 20px, 0); } 100% { opacity: 1; transform: translate3d(0, 0, 0); } }
+        .card-anim { animation: slideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+        .card.enabled { box-shadow: inset 4px 0 0 0 var(--accent-green); }
+        .card.disabled { box-shadow: inset 4px 0 0 0 var(--accent-red); }
+        .card-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; word-break: break-all; line-height: 1.4; display: flex; align-items: center; }
+        .card.enabled .card-title { color: var(--accent-green); }
+        .card.disabled .card-title { color: var(--accent-red); }
+        .card-level { font-size: 14px; color: #d0d0d5; margin-bottom: 10px; line-height: 1.4; display: flex; }
+        .card-level::before { content: "目的地"; color: var(--text-sub); font-size: 12px; background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 4px; margin-right: 8px; height: fit-content; margin-top: 1px; }
+        .card-coord { font-size: 13px; font-family: monospace; color: #888; background: rgba(0, 0, 0, 0.3); padding: 8px 12px; border-radius: 8px; display: inline-block; letter-spacing: 0.5px; }
+        .card-coord span { color: #fff; font-weight: 600; }
+
+        /* 搜索与选项卡 */
+        .search-bar { flex-shrink: 0; padding: 0 15px 10px 15px; display: none; }
+        .search-input-wrap { background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--border-radius); display: flex; align-items: center; padding: 0 15px; transition: border-color 0.2s; }
+        .search-input-wrap:focus-within { border-color: var(--btn-blue); }
+        .search-input-wrap input { flex: 1; background: transparent; border: none; color: white; padding: 15px 0; font-size: 15px; outline: none; }
+        .btn-clear { background: none; border: none; color: #888; font-size: 20px; padding: 10px; display: none; }
+
+        .tabs { flex-shrink: 0; padding: 10px 15px; padding-bottom: max(15px, env(safe-area-inset-bottom)); display: none; gap: 12px; background: var(--bg-color); }
+        .tab-btn { flex: 1; padding: 14px; border: none; border-radius: var(--border-radius); font-size: 15px; font-weight: 600; background: var(--card-bg); color: #888; border: 1px solid rgba(255, 255, 255, 0.05); transition: transform 0.15s, background-color 0.2s, color 0.2s; transform: translate3d(0, 0, 0); }
+        .tab-btn:active { transform: scale(0.95) translate3d(0, 0, 0); }
+        .tab-btn.active-avail { background: rgba(0, 255, 170, 0.1); color: var(--accent-green); border-color: rgba(0, 255, 170, 0.2); }
+        .tab-btn.active-dis { background: rgba(255, 68, 102, 0.1); color: var(--accent-red); border-color: rgba(255, 68, 102, 0.2); }
+
+        /* 弹窗与动画 */
+        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background: rgba(40, 40, 50, 0.95); color: white; padding: 16px 32px; border-radius: 40px; font-size: 16px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 999; will-change: transform, opacity; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+        .toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .ripple { position: absolute; border-radius: 50%; background-color: rgba(255, 255, 255, 0.15); transform: scale(0); animation: ripple-anim 0.4s ease-out; pointer-events: none; will-change: transform, opacity; }
+        @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+
+        /* App 列表选择器 */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: none; align-items: flex-start; justify-content: center; }
+        .modal-overlay.show { display: flex; }
+        .app-selector { background: #121212; width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .app-header { background: #3f51b5; padding: max(15px, env(safe-area-inset-top)) 15px 15px 15px; display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
+        .app-back-btn { background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0 10px; }
+        .app-title { color: white; font-size: 18px; font-weight: bold; }
+        .app-list { flex: 1; overflow-y: auto; background: #000; }
+        .app-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #222; cursor: pointer; }
+        .app-item:active { background: #1a1a1a; }
+        .app-icon { width: 45px; height: 45px; border-radius: 8px; background: #333; object-fit: cover; margin-right: 15px; }
+        .app-info { display: flex; flex-direction: column; }
+        .app-name { color: #fff; font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+        .app-pkg { color: #888; font-size: 13px; }
+        .loading { text-align: center; color: #888; padding: 20px; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div class="aurora-bg">
+        <div class="aurora-blob blob-1"></div>
+        <div class="aurora-blob blob-2"></div>
+    </div>
+
+    <div class="top-bar">
+        <button class="btn-import" id="importBtn">📂 导入光遇 JSON 文件</button>
+        <input type="file" id="fileInput" accept="*/*" style="display: none;">
+        <button class="btn-import btn-apk" id="importApkBtn">📱 读取已安装应用</button>
+    </div>
+
+    <div class="list-container" id="listContainer"></div>
+
+    <div class="search-bar" id="searchBar">
+        <div class="search-input-wrap">
+            <input type="text" id="searchInput" placeholder="搜索传送点或目的地...">
+            <button class="btn-clear" id="btnClear">×</button>
+        </div>
+    </div>
+
+    <div class="tabs" id="tabs">
+        <button class="tab-btn active-avail" id="tabAvail">可用传送点 (0)</button>
+        <button class="tab-btn" id="tabDis">禁用传送点 (0)</button>
+    </div>
+
+    <div class="toast" id="toast">已复制到剪贴板！</div>
+
+    <div class="modal-overlay" id="nativeAppModal">
+        <div class="app-selector">
+            <div class="app-header">
+                <button class="app-back-btn" onclick="document.getElementById('nativeAppModal').classList.remove('show')">←</button>
+                <div class="app-title" id="modalTitle">选择测试程序</div>
+            </div>
+            <div class="app-list" id="appList">
+                <div class="loading">正在获取应用列表...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GITHUB_ONLINE_DICT_URL = "https://raw.githubusercontent.com/OneStarZero/Sky-Portal-preview/refs/heads/main/online_dict.json"; 
+        
+        const LOCAL_TRANSLATIONS = {
+            "CandleSpace": "遇境", "Dawn": "晨岛", "StormEvent_VoidSpace": "暴风眼·虚空空间", "MainStreet": "云巢", "MainStreetFlyingIntro": "云巢·飞行引导", "MainStreet_ShopOutfits": "云巢·服装店", "MainStreet_ShopSpells": "云巢·魔法商店", "MainStreet_ShopProps": "云巢·道具店", "MainStreet_Apartment": "云巢·公寓", "MainStreet_Cafe": "云巢·咖啡厅", "MainStreet_ConcertHall": "云巢·音乐堂", "MainStreet_FunArmada": "云巢·游乐场", "MainStreet_Soundbath": "云巢·声音浴", "MainStreet_Cafe_Wonderland": "云巢·仙境咖啡厅", "MainStreet_StorySpace": "云巢·故事空间", "Event_Cinema": "活动·剧场", "Night_IPHallway": "禁阁·走廊", "Prairie_ButterflyFields": "云野·蝴蝶平原", "Prairie_Cave": "云野·洞穴", "Prairie_NestAndKeeper": "云野·鸟巢与圣岛", "Prairie_Island": "云野·圣岛", "Prairie_Village": "云野·三塔图", "Prairie_WildLifePark": "云野·野生动物园", "DayHubCave": "白日中心洞穴", "DayEnd": "晨岛·终点", "Rain": "雨林", "RainForest": "雨林", "RainMid": "雨林·中段", "RainShelter": "雨林·树屋", "Rain_Cave": "雨林·洞穴", "Rain_BaseCamp": "雨林·营地", "RainEnd": "雨林·终点", "Skyway": "云道", "Sunset": "霞谷", "SunsetRace": "霞谷·赛道", "Sunset_Citadel": "霞谷·霞光城", "Sunset_FlyRace": "霞谷·飞行赛道", "SunsetEnd": "霞谷·终点", "SunsetColosseum": "霞谷·竞技场", "SunsetEnd2": "霞谷·终点深处", "SunsetVillage": "霞谷·村落", "SunsetVillage_MusicShop": "霞谷·音乐商店", "Sunset_YetiPark": "霞谷·隐士山谷", "Sunset_Theater": "霞谷·圆梦村剧场", "Event_HidenSeek_SnowVillage": "活动·捉迷藏雪村", "DuskStart": "暮土·起点", "Dusk": "暮土", "Dusk_Triangle": "暮土·三角地带", "Dusk_TriangleEnd": "暮土·三角终点", "DuskOasis": "暮土·绿洲", "DuskGraveyard": "暮土·四龙图", "Dusk_CrabField": "暮土·螃蟹田", "DuskMid": "暮土·中段", "DuskEnd": "暮土·终点", "Nintendo_CandleSpace": "任天堂遇境", "Event_WerewolfGame": "活动·狼人杀", "Night": "禁阁", "NightArchive": "禁阁·档案馆", "Night2": "禁阁(二层)", "NightEnd": "禁阁·终点", "TGCOffice": "TGC办公室", "Event_Personality": "活动·性格测试", "VoidSharedSpace": "虚空共享空间", "Event_DaysOfMischief": "活动·恶作剧之日", "Event_DaysOfMischief_Escape": "活动·恶作剧逃脱", "UndergroundOffice": "地下办公室", "DawnCave": "晨岛·洞穴", "Dawn_TrialsWater": "晨岛·水之试炼", "Dawn_TrialsEarth": "晨岛·地之试炼", "Dawn_TrialsAir": "晨岛·风之试炼", "Dawn_TrialsFire": "晨岛·火之试炼", "NightDesert": "禁阁·星漠", "NightDesert_Planets": "禁阁·星漠行星", "NightDesert_Beach": "禁阁·星漠海滩", "Night_InfiniteDesert": "禁阁·无尽沙漠", "Night_JarCave": "禁阁·罐子洞穴", "Night_Shelter": "禁阁·庇护所", "Event_Arr_Runaway": "欧若拉·逃跑", "Event_Arr_SoftInside": "欧若拉·柔软内心", "Event_Arr_Warrior": "欧若拉·战士", "Event_Arr_TheSeed": "欧若拉·种子", "Event_Arr_EyesOfAChild": "欧若拉·孩童之眼", "Event_Arr_ExhaleInhale": "欧若拉·呼吸", "Night_PaintedWorld": "禁阁·彩绘世界", "Event_DaysOfMoonlight_HugeMoon": "活动·月光日(巨月)", "Season24Void1": "第24赛季虚空", "Night_StoryBook": "禁阁·故事书", "Night_ValleyForest": "禁阁·山谷森林", "Night_ValleyHouse": "禁阁·山谷房屋", "Night_ValleyHouseSky": "禁阁·山谷天空", "Rain_BlueBirdTheater": "雨林·青鸟剧场", "DuskMid_Past": "暮土·中段(废弃)", "DuskMid_PastMarket": "暮土·中段废弃集市", "Dusk_HiddenTemple": "暮土·隐藏神庙", "DuskEnd_Past": "暮土·终点(废弃)", "Night_Jumble": "禁阁·杂物间", "Night_Workshop": "禁阁·工作室", "Night_GO_City": "云巢·竞速城市", "Night_GO_Farm": "云巢·竞速农场", "Night_GO_Field": "云巢·竞速田野", "Night_GO_Gallery": "云巢·竞速画廊", "Night_GO_Island": "云巢·竞速岛屿", "Nest_Night_GO_Town": "云巢·竞速家园", "Night_GO_Town": "云巢·竞速小镇", "Night_GO_Tree": "云巢·竞速树木", "Dusk_PearlIsland": "暮土·珍珠岛", "Dusk_PearlSea": "暮土·珍珠海", "StormStart": "暴风眼·起点", "Storm": "暴风眼", "StormEnd": "暴风眼·终点", "OrbitMid": "重生之路·中段", "OrbitEnd": "伊甸之眼(终点)", "CandleSpaceEnd": "遇境·终点", "Credits": "制作人员名单", "AR_TestLevel": "AR·测试关卡", "AR_WheatField": "AR·麦田", "AR_Bedroom": "AR·卧室", "WorldEmpty": "空世界"
+        };
+
+        let ONLINE_TRANSLATIONS = {}; 
+        let IS_ONLINE_MODE = false;   
+        let SORTED_KEYS = [];         
+
+        function updateSortedKeys() {
+            let combined = Object.assign({}, LOCAL_TRANSLATIONS, ONLINE_TRANSLATIONS);
+            SORTED_KEYS = Object.keys(combined).sort((a, b) => b.length - a.length);
+        }
+        updateSortedKeys();
+
+        function fetchOnlineDict() {
+            if (!navigator.onLine) return;
+            fetch(GITHUB_ONLINE_DICT_URL + "?t=" + Date.now())
+                .then(res => { if(!res.ok) throw new Error("网络不佳"); return res.json(); })
+                .then(data => { ONLINE_TRANSLATIONS = data; IS_ONLINE_MODE = true; updateSortedKeys(); })
+                .catch(err => console.log("在线词典加载失败", err));
+        }
+        fetchOnlineDict();
+        window.addEventListener('online', fetchOnlineDict);
+
+        function translateLevel(rawName) {
+            if (!rawName) return "未知";
+            let activeDict = IS_ONLINE_MODE ? Object.assign({}, LOCAL_TRANSLATIONS, ONLINE_TRANSLATIONS) : LOCAL_TRANSLATIONS;
+            if (activeDict[rawName]) return `${rawName} (${activeDict[rawName]})`;
+            let cleanName = rawName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            for (let key of SORTED_KEYS) {
+                let cleanKey = key.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                if (cleanKey && cleanName.includes(cleanKey)) return `${rawName} (${activeDict[key]})`;
+            }
+            return rawName;
+        }
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx; let lastPlayTime = 0;
+        function initAudio() { if (!audioCtx) audioCtx = new AudioContext(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
+        function playSound(type) {
+            if (!audioCtx) return;
+            const now = Date.now(); if (now - lastPlayTime < 120) return; lastPlayTime = now;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination); const t = audioCtx.currentTime;
+            switch(type) {
+                case 'tap': osc.type='sine'; osc.frequency.setValueAtTime(400,t); osc.frequency.exponentialRampToValueAtTime(600,t+0.05); gain.gain.setValueAtTime(0.15,t); gain.gain.exponentialRampToValueAtTime(0.01,t+0.1); osc.start(t); osc.stop(t+0.1); break;
+                case 'tab': osc.type='triangle'; osc.frequency.setValueAtTime(300,t); osc.frequency.exponentialRampToValueAtTime(800,t+0.1); gain.gain.setValueAtTime(0.2,t); gain.gain.exponentialRampToValueAtTime(0.01,t+0.15); osc.start(t); osc.stop(t+0.15); break;
+                case 'success': osc.type='sine'; osc.frequency.setValueAtTime(800,t); osc.frequency.setValueAtTime(1200,t+0.1); gain.gain.setValueAtTime(0.2,t); gain.gain.exponentialRampToValueAtTime(0.01,t+0.3); osc.start(t); osc.stop(t+0.3); break;
+            }
+        }
+
+        class SkyBinaryParser {
+            constructor(buffer) { this.buffer = buffer; this.view = new DataView(buffer); this.offset = 0; this.textDecoder = new TextDecoder('utf-8'); }
+            readUint8() { const v = this.view.getUint8(this.offset); this.offset += 1; return v; }
+            readUint16() { const v = this.view.getUint16(this.offset, true); this.offset += 2; return v; }
+            readUint32() { const v = this.view.getUint32(this.offset, true); this.offset += 4; return v; }
+            readFloat32() { const v = this.view.getFloat32(this.offset, true); this.offset += 4; return v; }
+            readFloat64() { const v = this.view.getFloat64(this.offset, true); this.offset += 8; return v; }
+            seek(bytes) { this.offset += bytes; }
+            readString() {
+                let start = this.offset;
+                while (this.offset < this.buffer.byteLength && this.view.getUint8(this.offset) !== 0) this.offset++;
+                const str = this.textDecoder.decode(new Uint8Array(this.buffer, start, this.offset - start));
+                this.offset++; return str;
+            }
+            parse() {
+                this.offset = 4; 
+                const header = { version: this.readUint32(), class_length: this.readUint32(), property_count: this.readUint32(), bst_node_count: this.readUint32(), object_ptr_count: this.readUint32(), class_offset: this.readUint32(), property_offset: this.readUint32(), property_name_offset: this.readUint32(), bst_node_offset: this.readUint32(), file_size: this.readUint32() };
+                let classes = [];
+                this.offset = header.class_offset;
+                for (let i = 0; i < header.class_length; i++) { classes.push({ class_property_name_offset: this.readUint32(), class_property_starting_index: this.readUint32(), class_property_count: this.readUint32(), class_name: '' }); }
+                let allProperties = [];
+                for (let i = 0; i < classes.length; i++) {
+                    let cls = classes[i]; let props = [];
+                    this.offset = header.property_offset + (cls.class_property_starting_index * 16);
+                    for (let j = 0; j < cls.class_property_count; j++) { props.push({ property_type: this.readUint32(), property_name_offset: this.readUint32(), object_byte_size: this.readUint32(), array_index: this.readUint32(), property_name: '' }); }
+                    for (let p of props) { this.offset = header.property_name_offset + p.property_name_offset; p.property_name = this.readString(); }
+                    allProperties.push(props);
+                    this.offset = header.property_name_offset + cls.class_property_name_offset;
+                    cls.class_name = this.readString();
+                }
+                this.offset = header.bst_node_offset;
+                let jsonData = { version: header.version, MemorySize: header.object_ptr_count.toString(), classes: {}, BSTNodes: {} };
+                for (let i = 0; i < classes.length; i++) {
+                    let cls = classes[i];
+                    if (allProperties[i].length === 0) jsonData.classes[cls.class_name] = null;
+                    else {
+                        jsonData.classes[cls.class_name] = {};
+                        for (let p of allProperties[i]) jsonData.classes[cls.class_name][p.property_name] = { propertyType: p.property_type, objectByteSize: p.object_byte_size, arrayIndex: p.array_index };
+                    }
+                }
+                for (let i = 0; i < header.bst_node_count; i++) {
+                    let index = this.readUint32(); let bstName = this.readString();
+                    jsonData.BSTNodes[bstName] = {};
+                    this.readClass(jsonData.BSTNodes[bstName], index, allProperties, classes);
+                }
+                const bstNodeNames = Object.keys(jsonData.BSTNodes);
+                for (let nodeName in jsonData.BSTNodes) {
+                    let bstData = jsonData.BSTNodes[nodeName];
+                    for (let className in bstData) {
+                        let classMeta = jsonData.classes[className]; let classData = bstData[className];
+                        if (classMeta && classData) this.resolveClumpRefs(classData, jsonData.classes, classMeta, classes, bstNodeNames);
+                    }
+                }
+                return jsonData;
+            }
+            readClass(targetJson, index, allProperties, classes) {
+                if (index >= allProperties.length) return;
+                for (let prop of allProperties[index]) {
+                    if (prop.property_type === 0) {
+                        if (prop.object_byte_size === 1) { let val = this.readUint8(); targetJson[prop.property_name] = (val <= 1) ? (val === 1) : `[Unknown]${val.toString(16).toUpperCase()}`; }
+                        else if (prop.object_byte_size === 2) { targetJson[prop.property_name] = this.readUint16().toString(); }
+                        else if (prop.object_byte_size === 4) {
+                            let raw = this.view.getUint32(this.offset, true); let fval = this.readFloat32();
+                            let isIntProp = prop.property_name === 'bstGuid' || prop.property_name.includes('BstGuid');
+                            let s = fval.toFixed(6);
+                            if (isIntProp || s === "0.000000" || s === "-0.000000") targetJson[prop.property_name] = raw.toString();
+                            else targetJson[prop.property_name] = s;
+                        }
+                        else if (prop.object_byte_size === 8) targetJson[prop.property_name] = this.readFloat64().toString();
+                        else if (prop.object_byte_size === 16) targetJson[prop.property_name] = [this.readFloat32(), this.readFloat32(), this.readFloat32(), this.readFloat32()].map(v => v.toString());
+                        else if (prop.object_byte_size === 64) { let t = []; for (let r = 0; r < 4; r++) { let row = []; for (let c = 0; c < 4; c++) row.push(this.readFloat32().toString()); t.push(row); } targetJson[prop.property_name] = t; }
+                        else { targetJson[`[Unknown Property]${prop.property_name}`] = `[Size (Bytes)]${prop.object_byte_size}`; this.seek(prop.object_byte_size); }
+                    } else if (prop.property_type === 1) targetJson[prop.property_name] = this.readString();
+                    else if (prop.property_type === 2) { let raw = this.view.getUint32(this.offset, true); let fval = this.readFloat32(); let s = fval.toFixed(6); targetJson[`[CLUMP]${prop.property_name}`] = (s !== "-nan") ? raw.toString() : s; }
+                    else if (prop.property_type === 3) {
+                        let count = this.readUint32();
+                        if (prop.array_index !== 0xFFFFFFFF) {
+                            let arr = []; for (let i = 0; i < count; i++) { let elem = {}; this.readClass(elem, prop.array_index, allProperties, classes); arr.push(elem); } targetJson[prop.property_name] = arr;
+                        } else {
+                            targetJson[prop.property_name] = { "Num": count.toString(), "[CLUMP]data": [] };
+                            for (let i = 0; i < count; i++) { let raw = this.view.getUint32(this.offset, true); let fval = this.readFloat32(); let s = fval.toFixed(6); targetJson[prop.property_name]["[CLUMP]data"].push((s !== "-nan") ? raw.toString() : s); }
+                        }
+                    } else { targetJson[`[UNKNOWN]${prop.property_name}`] = `[Size (Bytes)] ${prop.object_byte_size}`; this.seek(prop.object_byte_size > 0 ? prop.object_byte_size : 4); }
+                }
+            }
+            resolveClumpRefs(classData, allClassesMeta, classMeta, classes, bstNodeNames) {
+                for (let propName in classMeta) {
+                    let meta = classMeta[propName];
+                    if (meta.propertyType === 2) { let clumpKey = `[CLUMP]${propName}`; if (classData[clumpKey] && typeof classData[clumpKey] === 'string') classData[clumpKey] = this.resolveClumpString(classData[clumpKey], bstNodeNames); }
+                    else if (meta.propertyType === 3) {
+                        if (!classData[propName]) continue;
+                        if (meta.arrayIndex === 0xFFFFFFFF) { if (classData[propName]["[CLUMP]data"]) classData[propName]["[CLUMP]data"] = classData[propName]["[CLUMP]data"].map(v => this.resolveClumpString(v, bstNodeNames)); }
+                        else if (Array.isArray(classData[propName]) && meta.arrayIndex < classes.length) {
+                            let nestedClassName = classes[meta.arrayIndex].class_name; let nestedMeta = allClassesMeta[nestedClassName];
+                            if (!nestedMeta) continue;
+                            for (let elem of classData[propName]) this.resolveClumpRefs(elem, allClassesMeta, nestedMeta, classes, bstNodeNames);
+                        }
+                    }
+                }
+            }
+            resolveClumpString(value, bstNodeNames) {
+                if (value === "-nan" || value === "nan") return "-nan";
+                let idx = parseInt(value, 10);
+                if (!isNaN(idx) && idx >= 0 && idx < bstNodeNames.length) return bstNodeNames[idx];
+                return value;
+            }
+        }
+
+        let parsedData = { enabled: [], disabled: [] };
+        let currentTab = 'enabled';
+        let currentApkPath = "";
+
+        const importBtn = document.getElementById('importBtn');
+        const fileInput = document.getElementById('fileInput');
+        const listContainer = document.getElementById('listContainer');
+        const searchBar = document.getElementById('searchBar');
+        const searchInput = document.getElementById('searchInput');
+        const btnClear = document.getElementById('btnClear');
+        const tabs = document.getElementById('tabs');
+        const tabAvail = document.getElementById('tabAvail');
+        const tabDis = document.getElementById('tabDis');
+        const toast = document.getElementById('toast');
+
+        const nativeAppModal = document.getElementById('nativeAppModal');
+        const appListContainer = document.getElementById('appList');
+        const modalTitle = document.getElementById('modalTitle');
+
+        document.body.addEventListener('touchstart', initAudio, { once: true, passive: true });
+        document.body.addEventListener('mousedown', initAudio, { once: true });
+
+        importBtn.addEventListener('click', () => { 
+            if (importBtn.innerText.includes("正在解析")) return;
+            playSound('tap'); fileInput.value = ''; fileInput.click(); 
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            listContainer.innerHTML = `<div style="text-align:center;padding:20px;color:#666;">解析中...</div>`;
+            importBtn.innerText = "⏳ 正在解析...";
+            const reader = new FileReader();
+            reader.onload = (event) => { 
+                try { processData(JSON.parse(event.target.result)); playSound('success'); } 
+                catch (err) { alert("解析失败！"); importBtn.innerText = "📂 导入光遇 JSON 文件"; listContainer.innerHTML = ""; }
+            };
+            reader.readAsText(file);
+        });
+
+        document.getElementById('importApkBtn').addEventListener('click', () => {
+            playSound('tap');
+            if (window.AndroidNative && window.AndroidNative.getInstalledApps) {
+                nativeAppModal.classList.add('show');
+                modalTitle.innerText = "选择测试程序";
+                appListContainer.innerHTML = `<div class="loading">正在获取应用列表...</div>`;
+                window.AndroidNative.getInstalledApps();
+            } else {
+                alert("当前环境不是原生 App，无法扫描应用列表。");
+            }
+        });
+
+        window.showNativeApps = function(apps) {
+            if (!apps || apps.length === 0) {
+                appListContainer.innerHTML = `<div class="loading">未获取到应用</div>`;
+                return;
+            }
+            appListContainer.innerHTML = "";
+            apps.forEach(app => {
+                let item = document.createElement('div');
+                item.className = 'app-item';
+                item.innerHTML = `
+                    <img class="app-icon" src="${app.icon || ''}" onerror="this.style.display='none'">
+                    <div class="app-info">
+                        <div class="app-name">${app.appName}</div>
+                        <div class="app-pkg">${app.packageName}</div>
+                    </div>
+                `;
+                item.addEventListener('click', () => {
+                    playSound('tap');
+                    currentApkPath = app.apkPath;
+                    modalTitle.innerText = "正在读取关卡...";
+                    appListContainer.innerHTML = `<div class="loading">正在扫描 APK 内部地图数据...</div>`;
+                    window.AndroidNative.getApkLevels(app.apkPath);
+                });
+                appListContainer.appendChild(item);
+            });
+        };
+
+        window.showApkLevels = function(levels) {
+            if (!levels || levels.length === 0) {
+                appListContainer.innerHTML = `<div class="loading">该 APK 中未找到地图文件</div>`;
+                return;
+            }
+            modalTitle.innerText = "选择要解析的关卡";
+            appListContainer.innerHTML = "";
+            
+            levels.sort((a, b) => a.levelName.localeCompare(b.levelName));
+            
+            levels.forEach(level => {
+                let item = document.createElement('div');
+                item.className = 'app-item';
+                item.innerHTML = `<div class="app-name" style="color:#00ffaa;">${translateLevel(level.levelName)}</div>`;
+                item.addEventListener('click', () => {
+                    playSound('tap');
+                    nativeAppModal.classList.remove('show');
+                    listContainer.innerHTML = `<div style="text-align:center;padding:20px;color:#666;">正在提取并解析二进制...</div>`;
+                    importBtn.innerText = "⏳ 正在解析...";
+                    window.AndroidNative.extractLevelData(currentApkPath, level.entryName);
+                });
+                appListContainer.appendChild(item);
+            });
+        };
+
+        window.loadLevelData = function(base64Data, levelName) {
+            try {
+                const binaryString = window.atob(base64Data);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+
+                const parser = new SkyBinaryParser(bytes.buffer);
+                const jsonData = parser.parse();
+
+                const wantExport = confirm(`【${levelName}】解析成功！\n\n是否将完整 JSON 数据导出保存？`);
+                if (wantExport) downloadJSON(jsonData, `${levelName}_Objects.level.json`);
+
+                processData(jsonData);
+                importBtn.innerText = "📂 导入光遇 JSON 文件";
+                playSound('success');
+
+            } catch (err) {
+                console.error(err);
+                alert("解析失败：" + err.message);
+                importBtn.innerText = "📂 导入光遇 JSON 文件";
+                listContainer.innerHTML = "";
+            }
+        };
+
+        function processData(data) { 
+            parsedData.enabled = [];
+            parsedData.disabled = [];
+            const bstNodes = data.BSTNodes || {};
+
+            for (let key in bstNodes) {
+                let node = bstNodes[key];
+                if (!node || !node.LevelLink) continue;
+                let link = node.LevelLink;
+                let tf = link.transform;
+                if (!tf) continue;
+
+                let mx = 0, my = 0, mz = 0;
+                try {
+                    if (Array.isArray(tf) && tf.length >= 4) {
+                        mx = parseFloat(tf[3][0]); my = parseFloat(tf[3][1]); mz = parseFloat(tf[3][2]);
+                        if (mx === 0 && my === 0 && mz === 0) {
+                            mx = parseFloat(tf[0][3]); my = parseFloat(tf[1][3]); mz = parseFloat(tf[2][3]);
+                        }
+                    }
+                } catch (e) { continue; }
+                if (mx === 0 && my === 0 && mz === 0) continue;
+
+                let translatedLevel = translateLevel(link.levelName || "未知");
+                let item = { name: link.linkName || "未知", level: translatedLevel, x: mx.toFixed(1), z: my.toFixed(1), y: mz.toFixed(1) };
+
+                if (link.enabled === true || link.enabled === 1 || link.enabled === "true") parsedData.enabled.push(item);
+                else parsedData.disabled.push(item);
+            }
+
+            searchBar.style.display = "block";
+            tabs.style.display = "flex";
+            tabAvail.innerText = `可用 (${parsedData.enabled.length})`;
+            tabDis.innerText = `禁用 (${parsedData.disabled.length})`;
+            switchTab('enabled');
+        }
+
+        tabAvail.addEventListener('click', () => { playSound('tab'); switchTab('enabled'); });
+        tabDis.addEventListener('click', () => { playSound('tab'); switchTab('disabled'); });
+
+        function switchTab(type) {
+            currentTab = type;
+            if (type === 'enabled') { tabAvail.className = "tab-btn active-avail"; tabDis.className = "tab-btn"; } 
+            else { tabAvail.className = "tab-btn"; tabDis.className = "tab-btn active-dis"; }
+            renderList();
+        }
+
+        let searchTimer;
+        searchInput.addEventListener('input', () => { btnClear.style.display = searchInput.value ? "block" : "none"; clearTimeout(searchTimer); searchTimer = setTimeout(renderList, 100); });
+        btnClear.addEventListener('click', () => { searchInput.value = ""; btnClear.style.display = "none"; renderList(); });
+
+        function renderList() {
+            const fragment = document.createDocumentFragment();
+            let sourceData = currentTab === 'enabled' ? parsedData.enabled : parsedData.disabled;
+            let keyword = searchInput.value.trim().toLowerCase();
+            if (keyword) sourceData = sourceData.filter(item => item.name.toLowerCase().includes(keyword) || item.level.toLowerCase().includes(keyword));
+
+            if (sourceData.length === 0) { listContainer.innerHTML = `<div style="text-align:center; color:#666; margin-top:50px;">没有找到匹配的传送点</div>`; return; }
+
+            sourceData.forEach((item, index) => {
+                let card = document.createElement('div');
+                card.className = `card ${currentTab} card-anim`;
+                card.style.animationDelay = `${Math.min(index * 0.015, 0.3)}s`; 
+                card.innerHTML = `
+                    <div class="card-title">[${currentTab === 'enabled' ? '可用' : '不可用'}] ${item.name}</div>
+                    <div class="card-level">${item.level}</div>
+                    <div class="card-coord">X <span>${item.x}</span> | Z <span>${item.z}</span> | Y <span>${item.y}</span></div>
+                `;
+                bindCardEvents(card, item); fragment.appendChild(card);
+            });
+
+            listContainer.innerHTML = ""; listContainer.appendChild(fragment);
+        }
+
+        function bindCardEvents(card, item) {
+            let timer; let isSoundPlayed = false;
+            const startPress = (e) => {
+                if (isSoundPlayed) return; isSoundPlayed = true; setTimeout(() => { isSoundPlayed = false; }, 150);
+                playSound('tap'); createRipple(e, card);
+                timer = setTimeout(() => { playSound('success'); copyToClipboard(item); }, 1000);
+            };
+            const endPress = () => clearTimeout(timer);
+            card.addEventListener('pointerdown', startPress); card.addEventListener('pointerup', endPress); card.addEventListener('pointerleave', endPress); card.addEventListener('pointercancel', endPress);
+            if (!window.PointerEvent) { card.addEventListener('touchstart', startPress, {passive: true}); card.addEventListener('touchend', endPress); card.addEventListener('touchmove', endPress); }
+        }
+
+        function createRipple(event, card) {
+            const rect = card.getBoundingClientRect(); let x, y;
+            if (event.clientX !== undefined) { x = event.clientX - rect.left; y = event.clientY - rect.top; } 
+            else if (event.touches && event.touches.length > 0) { x = event.touches[0].clientX - rect.left; y = event.touches[0].clientY - rect.top; } else { return; }
+            const ripple = document.createElement('div'); ripple.className = 'ripple';
+            ripple.style.left = `${x}px`; ripple.style.top = `${y}px`; ripple.style.width = ripple.style.height = '150px'; ripple.style.marginLeft = '-75px'; ripple.style.marginTop = '-75px';
+            card.appendChild(ripple); setTimeout(() => { if (ripple.parentNode) ripple.parentNode.removeChild(ripple); }, 400);
+        }
+
+        function copyToClipboard(item) {
+            const text = `${item.name} | 目的地: ${item.level} | 坐标: X ${item.x}, Z ${item.z}, Y ${item.y}`;
+            if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(showToast);
+            else {
+                let textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed";
+                document.body.appendChild(textArea); textArea.focus(); textArea.select();
+                try { document.execCommand('copy'); showToast(); } catch (err) {}
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function showToast() { if (navigator.vibrate) navigator.vibrate([30, 50, 30]); toast.classList.add('show'); setTimeout(() => { toast.classList.remove('show'); }, 2000); }
+
+        function downloadJSON(data, filename) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
