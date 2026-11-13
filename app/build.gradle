@@ -12,13 +12,27 @@ android {
         targetSdk 34
         versionCode 10
         versionName "0.1.0"
+        // 极致体积：仅保留英文和中文资源（去掉其他所有语言的库）
+        resourceConfigurations += ['en', 'zh']
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            // 极致性能与体积：开启代码压缩、混淆、资源压缩
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            
+            // 借用 Debug 签名，保证 GitHub 打出来的 release 包可以直接安装
+            signingConfig signingConfigs.debug 
+            
+            // 去掉无用架构（由于我们无 native 库，这项可确保纯净）
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+            }
         }
     }
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
