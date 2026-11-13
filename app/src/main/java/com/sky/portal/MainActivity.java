@@ -26,6 +26,8 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -34,8 +36,12 @@ import java.util.zip.ZipFile;
 public class MainActivity extends Activity {
     private WebView webView;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
+    
     private ValueCallback<Uri[]> mFilePathCallback;
     private static final int FILE_CHOOSER_RESULT_CODE = 1001;
+    
+    private String pendingJsonContent = null;
+    private static final int REQUEST_CODE_CREATE_DOCUMENT = 1002;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,20 +53,15 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
-        // 允许通过 file:// 访问其他文件
         settings.setAllowContentAccess(true);
         
         webView.setWebViewClient(new WebViewClient());
         
-        // 🌟 核心修复 1：重写 WebChromeClient 以支持网页里的 <input type="file">
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                if (mFilePathCallback != null) {
-                    mFilePathCallback.onReceiveValue(null);
-                }
+                if (mFilePathCallback != null) mFilePathCallback.onReceiveValue(null);
                 mFilePathCallback = filePathCallback;
-
                 Intent intent = fileChooserParams.createIntent();
                 try {
                     startActivityForResult(intent, FILE_CHOOSER_RESULT_CODE);
@@ -76,7 +77,6 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/index.html");
     }
 
-    // 接收文件选择结果
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FILE_CHOOSER_RESULT_CODE) {
@@ -84,19 +84,32 @@ public class MainActivity extends Activity {
             Uri[] results = null;
             if (resultCode == Activity.RESULT_OK && data != null) {
                 String dataString = data.getDataString();
-                if (dataString != null) {
-                    results = new Uri[]{Uri.parse(dataString)};
-                }
+                if (dataString != null) results = new Uri[]{Uri.parse(dataString)};
             }
             mFilePathCallback.onReceiveValue(results);
             mFilePathCallback = null;
+        } else if (requestCode == REQUEST_CODE_CREATE_DOCUMENT) {
+            if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+                Uri uri = data.getData();
+                try {
+                    OutputStream os = getContentResolver().openOutputStream(uri);
+                    if (os != null && pendingJsonContent != null) {
+                        os.write(pendingJsonContent.getBytes(StandardCharsets.UTF_8));
+                        os.close();
+                        mainHandler.post(() -> webView.evaluateJavascript("javascript:alert('JSON 保存成功！');", null));
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    mainHandler.post(() -> webView.evaluateJavascript("javascript:alert('保存失败: " + e.getMessage() + "');", null));
+                }
+            }
+            pendingJsonContent = null;
         } else {
             super.onActivityResult(requestCode, resultCode, data);
         }
     }
 
     public class NativeBridge {
-        // 1. 获取已安装应用列表
         @JavascriptInterface
         public void getInstalledApps() {
             new Thread(() -> {
@@ -124,13 +137,11 @@ public class MainActivity extends Activity {
                         }
                         jsonArray.put(appObj);
                     }
-
                     mainHandler.post(() -> webView.evaluateJavascript("javascript:showNativeApps(" + jsonArray.toString() + ")", null));
                 } catch (Exception e) { e.printStackTrace(); }
             }).start();
         }
 
-        // 2. 扫描 APK 关卡 (支持 Split APK 分包和忽略大小写)
         @JavascriptInterface
         public void getApkLevels(String packageName) {
             new Thread(() -> {
@@ -139,13 +150,10 @@ public class MainActivity extends Activity {
                     PackageManager pm = getPackageManager();
                     ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
                     
-                    // 收集主包和所有分包路径
                     java.util.List<String> apkPaths = new java.util.ArrayList<>();
-                    apkPaths.add(appInfo.sourceDir); // 主包
+                    apkPaths.add(appInfo.sourceDir);
                     if (appInfo.splitSourceDirs != null) {
-                        for (String split : appInfo.splitSourceDirs) {
-                            apkPaths.add(split); // 分包
-                        }
+                        for (String split : appInfo.splitSourceDirs) apkPaths.add(split);
                     }
 
                     for (String apkPath : apkPaths) {
@@ -156,7 +164,6 @@ public class MainActivity extends Activity {
                             String name = entry.getName();
                             String lowerName = name.toLowerCase();
                             
-                            // 放宽匹配规则：只要路径包含 levels 且以 objects.level.bin 结尾
                             if (lowerName.contains("/levels/") && lowerName.endsWith("/objects.level.bin")) {
                                 String[] parts = name.split("/");
                                 String levelName = "";
@@ -170,23 +177,18 @@ public class MainActivity extends Activity {
                                     JSONObject levelObj = new JSONObject();
                                     levelObj.put("levelName", levelName);
                                     levelObj.put("entryName", name);
-                                    levelObj.put("apkPath", apkPath); // 记录这个文件在哪个 APK 里
+                                    levelObj.put("apkPath", apkPath);
                                     levelsArray.put(levelObj);
                                 }
                             }
                         }
                         zipFile.close();
                     }
-
                     mainHandler.post(() -> webView.evaluateJavascript("javascript:showApkLevels(" + levelsArray.toString() + ")", null));
-                } catch (Exception e) { 
-                    e.printStackTrace(); 
-                    mainHandler.post(() -> webView.evaluateJavascript("alert('扫描 APK 时发生错误: " + e.getMessage() + "');", null));
-                }
+                } catch (Exception e) { e.printStackTrace(); }
             }).start();
         }
 
-        // 3. 提取具体的 bin 文件
         @JavascriptInterface
         public void extractLevelData(String apkPath, String entryName, String levelName) {
             new Thread(() -> {
@@ -199,17 +201,25 @@ public class MainActivity extends Activity {
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     byte[] buffer = new byte[8192];
                     int read;
-                    while ((read = is.read(buffer)) != -1) {
-                        baos.write(buffer, 0, read);
-                    }
+                    while ((read = is.read(buffer)) != -1) baos.write(buffer, 0, read);
                     is.close();
                     zipFile.close();
 
                     String base64Data = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
-
                     mainHandler.post(() -> webView.evaluateJavascript("javascript:loadLevelData('" + base64Data + "', '" + levelName + "')", null));
                 } catch (Exception e) { e.printStackTrace(); }
             }).start();
+        }
+
+        // 🌟 新增：原生文件导出支持
+        @JavascriptInterface
+        public void exportJson(String fileName, String jsonContent) {
+            pendingJsonContent = jsonContent;
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            intent.putExtra(Intent.EXTRA_TITLE, fileName);
+            startActivityForResult(intent, REQUEST_CODE_CREATE_DOCUMENT);
         }
 
         private Bitmap drawableToBitmap(Drawable drawable) {
@@ -221,4 +231,4 @@ public class MainActivity extends Activity {
             return bitmap;
         }
     }
-            }
+    }
