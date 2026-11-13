@@ -23,7 +23,6 @@
             user-select: none; display: flex; flex-direction: column; transform: translate3d(0, 0, 0); -webkit-overflow-scrolling: touch;
         }
 
-        /* 极光背景 */
         .aurora-bg { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0.4; }
         .aurora-blob { position: absolute; border-radius: 50%; filter: blur(40px); animation: float 20s infinite alternate ease-in-out; will-change: transform; transform: translate3d(0, 0, 0); }
         .blob-1 { width: 200px; height: 200px; background: #00ffaa; top: -5%; left: -5%; }
@@ -35,6 +34,7 @@
         .btn-import { width: 100%; background: linear-gradient(135deg, #3a66ff, #6a33ff); color: white; border: none; padding: 16px; font-size: 16px; font-weight: bold; border-radius: var(--border-radius); box-shadow: 0 4px 10px rgba(58, 102, 255, 0.2); transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1); transform: translate3d(0, 0, 0); }
         .btn-import:active { transform: scale(0.95) translate3d(0, 0, 0); }
         .btn-apk { background: linear-gradient(135deg, #00b09b, #96c93d); box-shadow: 0 4px 10px rgba(0, 176, 155, 0.2); }
+        .btn-switch { background: linear-gradient(135deg, #ff4466, #ff8844); box-shadow: 0 4px 10px rgba(255, 68, 102, 0.2); display: none; }
 
         /* 核心列表区 */
         .list-container { flex: 1; overflow-y: auto; padding: 0 15px 10px 15px; position: relative; }
@@ -71,15 +71,15 @@
         .ripple { position: absolute; border-radius: 50%; background-color: rgba(255, 255, 255, 0.15); transform: scale(0); animation: ripple-anim 0.4s ease-out; pointer-events: none; will-change: transform, opacity; }
         @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
 
-        /* App 列表选择器 */
+        /* 全屏列表弹窗 */
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: none; align-items: flex-start; justify-content: center; }
         .modal-overlay.show { display: flex; }
         .app-selector { background: #121212; width: 100%; height: 100%; display: flex; flex-direction: column; }
         .app-header { background: #3f51b5; padding: max(15px, env(safe-area-inset-top)) 15px 15px 15px; display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
         .app-back-btn { background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0 10px; }
         .app-title { color: white; font-size: 18px; font-weight: bold; }
-        .app-list { flex: 1; overflow-y: auto; background: #000; }
-        .app-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #222; cursor: pointer; }
+        .app-list { flex: 1; overflow-y: auto; background: #000; padding-bottom: env(safe-area-inset-bottom); }
+        .app-item { display: flex; align-items: center; padding: 15px 20px; border-bottom: 1px solid #222; cursor: pointer; }
         .app-item:active { background: #1a1a1a; }
         .app-icon { width: 45px; height: 45px; border-radius: 8px; background: #333; object-fit: cover; margin-right: 15px; }
         .app-info { display: flex; flex-direction: column; }
@@ -98,7 +98,9 @@
     <div class="top-bar">
         <button class="btn-import" id="importBtn">📂 导入光遇 JSON 文件</button>
         <input type="file" id="fileInput" accept="*/*" style="display: none;">
-        <button class="btn-import btn-apk" id="importApkBtn">📱 读取已安装应用</button>
+        <button class="btn-import btn-apk" id="importApkBtn">📱 读取已安装应用 (光遇)</button>
+        <!-- 切换地图按钮，初始隐藏 -->
+        <button class="btn-import btn-switch" id="switchMapBtn">🔄 切换地图关卡</button>
     </div>
 
     <div class="list-container" id="listContainer"></div>
@@ -117,6 +119,7 @@
 
     <div class="toast" id="toast">已复制到剪贴板！</div>
 
+    <!-- 全屏列表弹窗 -->
     <div class="modal-overlay" id="nativeAppModal">
         <div class="app-selector">
             <div class="app-header">
@@ -301,10 +304,12 @@
         }
 
         // =====================================================================
-        // 🚀 业务逻辑
+        // 🚀 业务逻辑与状态缓存
         // =====================================================================
         let parsedData = { enabled: [], disabled: [] };
         let currentTab = 'enabled';
+        let cachedLevels = []; // 🌟 缓存当前选择的 APK 的所有关卡列表
+        let currentPackageName = ""; // 记录当前包名
 
         const importBtn = document.getElementById('importBtn');
         const fileInput = document.getElementById('fileInput');
@@ -317,6 +322,8 @@
         const tabDis = document.getElementById('tabDis');
         const toast = document.getElementById('toast');
 
+        const importApkBtn = document.getElementById('importApkBtn');
+        const switchMapBtn = document.getElementById('switchMapBtn'); // 🌟 切换地图按钮
         const nativeAppModal = document.getElementById('nativeAppModal');
         const appListContainer = document.getElementById('appList');
         const modalTitle = document.getElementById('modalTitle');
@@ -324,7 +331,7 @@
         document.body.addEventListener('touchstart', initAudio, { once: true, passive: true });
         document.body.addEventListener('mousedown', initAudio, { once: true });
 
-        // 1. 导入 JSON (现在能正常弹出文件选择器了)
+        // 1. 导入 JSON (支持系统文件选择器)
         importBtn.addEventListener('click', () => { 
             if (importBtn.innerText.includes("正在解析")) return;
             playSound('tap'); fileInput.value = ''; fileInput.click(); 
@@ -337,14 +344,18 @@
             importBtn.innerText = "⏳ 正在解析...";
             const reader = new FileReader();
             reader.onload = (event) => { 
-                try { processData(JSON.parse(event.target.result)); playSound('success'); } 
+                try { 
+                    processData(JSON.parse(event.target.result)); 
+                    playSound('success'); 
+                    importBtn.innerText = "📂 导入光遇 JSON 文件"; 
+                } 
                 catch (err) { alert("解析失败！"); importBtn.innerText = "📂 导入光遇 JSON 文件"; listContainer.innerHTML = ""; }
             };
             reader.readAsText(file);
         });
 
         // 2. 读取已安装应用
-        document.getElementById('importApkBtn').addEventListener('click', () => {
+        importApkBtn.addEventListener('click', () => {
             playSound('tap');
             if (window.AndroidNative && window.AndroidNative.getInstalledApps) {
                 nativeAppModal.classList.add('show');
@@ -356,7 +367,18 @@
             }
         });
 
-        // 3. 接收应用列表
+        // 3. 点击切换地图按钮
+        switchMapBtn.addEventListener('click', () => {
+            playSound('tap');
+            if (cachedLevels.length > 0) {
+                renderLevelList(cachedLevels); // 直接复用缓存的列表弹窗
+                nativeAppModal.classList.add('show');
+            } else {
+                alert("暂无缓存的地图，请重新读取 APK");
+            }
+        });
+
+        // 4. 原生回调：接收应用列表
         window.showNativeApps = function(apps) {
             if (!apps || apps.length === 0) {
                 appListContainer.innerHTML = `<div class="loading">未获取到应用</div>`;
@@ -375,21 +397,27 @@
                 `;
                 item.addEventListener('click', () => {
                     playSound('tap');
+                    currentPackageName = app.packageName;
                     modalTitle.innerText = "正在读取关卡...";
                     appListContainer.innerHTML = `<div class="loading">正在深度扫描 APK (含分包) 内部地图数据...</div>`;
-                    // 传包名给原生，原生会自己去找主包和分包
                     window.AndroidNative.getApkLevels(app.packageName);
                 });
                 appListContainer.appendChild(item);
             });
         };
 
-        // 4. 接收关卡列表
+        // 5. 原生回调：接收关卡列表
         window.showApkLevels = function(levels) {
             if (!levels || levels.length === 0) {
                 appListContainer.innerHTML = `<div class="loading">该应用未找到地图文件<br>可能是应用被加密或非光遇包</div>`;
                 return;
             }
+            cachedLevels = levels; // 🌟 缓存关卡列表，以便后续随时切换
+            renderLevelList(levels);
+        };
+
+        // 渲染关卡列表弹窗
+        function renderLevelList(levels) {
             modalTitle.innerText = `选择要解析的关卡 (${levels.length})`;
             appListContainer.innerHTML = "";
             
@@ -411,16 +439,16 @@
                 item.addEventListener('click', () => {
                     playSound('tap');
                     nativeAppModal.classList.remove('show');
+                    // 如果在列表中，就显示正在提取
                     listContainer.innerHTML = `<div style="text-align:center;padding:20px;color:#666;">正在提取并解析二进制...</div>`;
-                    importBtn.innerText = "⏳ 正在解析...";
-                    // 传参：APK路径、ZIP里的完整文件名、关卡名
                     window.AndroidNative.extractLevelData(level.apkPath, level.entryName, level.levelName);
                 });
                 appListContainer.appendChild(item);
             });
-        };
+            nativeAppModal.classList.add('show');
+        }
 
-        // 5. 接收二进制解析数据
+        // 6. 原生回调：接收二进制解析数据
         window.loadLevelData = function(base64Data, levelName) {
             try {
                 const binaryString = window.atob(base64Data);
@@ -431,17 +459,19 @@
                 const parser = new SkyBinaryParser(bytes.buffer);
                 const jsonData = parser.parse();
 
+                // 隐藏读取APK的按钮，显示切换地图按钮
+                importApkBtn.style.display = "none";
+                switchMapBtn.style.display = "block";
+
                 const wantExport = confirm(`【${levelName}】解析成功！\n\n是否将完整 JSON 数据导出保存？`);
                 if (wantExport) downloadJSON(jsonData, `${levelName}_Objects.level.json`);
 
-                processData(jsonData);
-                importBtn.innerText = "📂 导入光遇 JSON 文件";
+                processData(jsonData, levelName);
                 playSound('success');
 
             } catch (err) {
                 console.error(err);
                 alert("解析失败：" + err.message);
-                importBtn.innerText = "📂 导入光遇 JSON 文件";
                 listContainer.innerHTML = "";
             }
         };
@@ -449,7 +479,7 @@
         // =====================================================================
         // 数据处理与渲染
         // =====================================================================
-        function processData(data) { 
+        function processData(data, levelName = "") { 
             parsedData.enabled = [];
             parsedData.disabled = [];
             const bstNodes = data.BSTNodes || {};
@@ -483,6 +513,18 @@
             tabs.style.display = "flex";
             tabAvail.innerText = `可用 (${parsedData.enabled.length})`;
             tabDis.innerText = `禁用 (${parsedData.disabled.length})`;
+
+            // 🌟 核心修复：如果没有找到传送点，给个明确提示
+            if (parsedData.enabled.length === 0 && parsedData.disabled.length === 0) {
+                listContainer.innerHTML = `
+                    <div style="text-align:center; color:#aaa; margin-top:50px; line-height:2;">
+                        当前地图 <b>[${translateLevel(levelName)}]</b><br>
+                        没有配置传送点 (LevelLink)。<br>
+                        <span style="font-size:12px;color:#666;">您可以切换其他地图尝试。</span>
+                    </div>`;
+                return;
+            }
+
             switchTab('enabled');
         }
 
@@ -506,7 +548,7 @@
             let keyword = searchInput.value.trim().toLowerCase();
             if (keyword) sourceData = sourceData.filter(item => item.name.toLowerCase().includes(keyword) || item.level.toLowerCase().includes(keyword));
 
-            if (sourceData.length === 0) { listContainer.innerHTML = `<div style="text-align:center; color:#666; margin-top:50px;">没有找到匹配的传送点</div>`; return; }
+            if (sourceData.length === 0) { listContainer.innerHTML = `<div style="text-align:center; color:#666; margin-top:50px;">当前分类下没有传送点</div>`; return; }
 
             sourceData.forEach((item, index) => {
                 let card = document.createElement('div');
