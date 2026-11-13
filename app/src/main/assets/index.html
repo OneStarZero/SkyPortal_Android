@@ -130,6 +130,9 @@
     </div>
 
     <script>
+        // =====================================================================
+        // 📦 翻译词典与状态
+        // =====================================================================
         const GITHUB_ONLINE_DICT_URL = "https://raw.githubusercontent.com/OneStarZero/Sky-Portal-preview/refs/heads/main/online_dict.json"; 
         
         const LOCAL_TRANSLATIONS = {
@@ -168,6 +171,9 @@
             return rawName;
         }
 
+        // =====================================================================
+        // 🎵 音效系统
+        // =====================================================================
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         let audioCtx; let lastPlayTime = 0;
         function initAudio() { if (!audioCtx) audioCtx = new AudioContext(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
@@ -183,6 +189,9 @@
             }
         }
 
+        // =====================================================================
+        // 🛠️ 核心 JS 二进制解析引擎
+        // =====================================================================
         class SkyBinaryParser {
             constructor(buffer) { this.buffer = buffer; this.view = new DataView(buffer); this.offset = 0; this.textDecoder = new TextDecoder('utf-8'); }
             readUint8() { const v = this.view.getUint8(this.offset); this.offset += 1; return v; }
@@ -291,9 +300,11 @@
             }
         }
 
+        // =====================================================================
+        // 🚀 业务逻辑
+        // =====================================================================
         let parsedData = { enabled: [], disabled: [] };
         let currentTab = 'enabled';
-        let currentApkPath = "";
 
         const importBtn = document.getElementById('importBtn');
         const fileInput = document.getElementById('fileInput');
@@ -313,6 +324,7 @@
         document.body.addEventListener('touchstart', initAudio, { once: true, passive: true });
         document.body.addEventListener('mousedown', initAudio, { once: true });
 
+        // 1. 导入 JSON (现在能正常弹出文件选择器了)
         importBtn.addEventListener('click', () => { 
             if (importBtn.innerText.includes("正在解析")) return;
             playSound('tap'); fileInput.value = ''; fileInput.click(); 
@@ -331,6 +343,7 @@
             reader.readAsText(file);
         });
 
+        // 2. 读取已安装应用
         document.getElementById('importApkBtn').addEventListener('click', () => {
             playSound('tap');
             if (window.AndroidNative && window.AndroidNative.getInstalledApps) {
@@ -343,6 +356,7 @@
             }
         });
 
+        // 3. 接收应用列表
         window.showNativeApps = function(apps) {
             if (!apps || apps.length === 0) {
                 appListContainer.innerHTML = `<div class="loading">未获取到应用</div>`;
@@ -361,26 +375,36 @@
                 `;
                 item.addEventListener('click', () => {
                     playSound('tap');
-                    currentApkPath = app.apkPath;
                     modalTitle.innerText = "正在读取关卡...";
-                    appListContainer.innerHTML = `<div class="loading">正在扫描 APK 内部地图数据...</div>`;
-                    window.AndroidNative.getApkLevels(app.apkPath);
+                    appListContainer.innerHTML = `<div class="loading">正在深度扫描 APK (含分包) 内部地图数据...</div>`;
+                    // 传包名给原生，原生会自己去找主包和分包
+                    window.AndroidNative.getApkLevels(app.packageName);
                 });
                 appListContainer.appendChild(item);
             });
         };
 
+        // 4. 接收关卡列表
         window.showApkLevels = function(levels) {
             if (!levels || levels.length === 0) {
-                appListContainer.innerHTML = `<div class="loading">该 APK 中未找到地图文件</div>`;
+                appListContainer.innerHTML = `<div class="loading">该应用未找到地图文件<br>可能是应用被加密或非光遇包</div>`;
                 return;
             }
-            modalTitle.innerText = "选择要解析的关卡";
+            modalTitle.innerText = `选择要解析的关卡 (${levels.length})`;
             appListContainer.innerHTML = "";
             
-            levels.sort((a, b) => a.levelName.localeCompare(b.levelName));
+            // 根据关卡名去重排序
+            let uniqueLevels = [];
+            let map = new Set();
+            levels.forEach(l => {
+                if(!map.has(l.levelName)) {
+                    map.add(l.levelName);
+                    uniqueLevels.push(l);
+                }
+            });
+            uniqueLevels.sort((a, b) => a.levelName.localeCompare(b.levelName));
             
-            levels.forEach(level => {
+            uniqueLevels.forEach(level => {
                 let item = document.createElement('div');
                 item.className = 'app-item';
                 item.innerHTML = `<div class="app-name" style="color:#00ffaa;">${translateLevel(level.levelName)}</div>`;
@@ -389,12 +413,14 @@
                     nativeAppModal.classList.remove('show');
                     listContainer.innerHTML = `<div style="text-align:center;padding:20px;color:#666;">正在提取并解析二进制...</div>`;
                     importBtn.innerText = "⏳ 正在解析...";
-                    window.AndroidNative.extractLevelData(currentApkPath, level.entryName);
+                    // 传参：APK路径、ZIP里的完整文件名、关卡名
+                    window.AndroidNative.extractLevelData(level.apkPath, level.entryName, level.levelName);
                 });
                 appListContainer.appendChild(item);
             });
         };
 
+        // 5. 接收二进制解析数据
         window.loadLevelData = function(base64Data, levelName) {
             try {
                 const binaryString = window.atob(base64Data);
@@ -420,6 +446,9 @@
             }
         };
 
+        // =====================================================================
+        // 数据处理与渲染
+        // =====================================================================
         function processData(data) { 
             parsedData.enabled = [];
             parsedData.disabled = [];
