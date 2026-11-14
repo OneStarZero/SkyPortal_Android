@@ -176,7 +176,8 @@
     <input type="file" id="fileApkInput" accept=".apk" style="display: none;">
 
     <script>
-        const GITHUB_ONLINE_DICT_URL = "https://raw.githubusercontent.com/OneStarZero/Sky-Portal-preview/refs/heads/main/online_dict.json"; 
+        // 🌟 更新为你的专属词典 Raw 链接
+        const GITHUB_ONLINE_DICT_URL = "https://raw.githubusercontent.com/OneStarZero/SkyPortalPreview-online_dict/refs/heads/main/online_dict.json"; 
         
         const LOCAL_TRANSLATIONS = {
             "CandleSpace": "遇境", "Dawn": "晨岛", "MainStreet": "云巢", "Night_IPHallway": "禁阁·走廊", 
@@ -194,34 +195,61 @@
         }
         updateSortedKeys();
 
+        // 🌟 词典的本地缓存 + 在线更新逻辑
         function fetchOnlineDict() {
-    if (!navigator.onLine) {
-        console.log("离线状态，使用本地词典");
-        return;
-    }
-    
-    // 增加超时机制，避免网络慢时一直转圈
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+            // 1. 优先读取本地缓存
+            if (window.AndroidNative && window.AndroidNative.getLocalDict) {
+                let localStr = window.AndroidNative.getLocalDict();
+                if (localStr && localStr.trim() !== "") {
+                    try {
+                        ONLINE_TRANSLATIONS = JSON.parse(localStr);
+                        IS_ONLINE_MODE = true;
+                        updateSortedKeys();
+                        console.log("✅ 成功加载本地缓存词典");
+                    } catch (e) {
+                        console.log("本地缓存解析失败，等待在线更新");
+                    }
+                }
+            }
 
-    fetch(GITHUB_ONLINE_DICT_URL + "?t=" + Date.now(), { signal: controller.signal })
-        .then(res => { 
-            if(!res.ok) throw new Error("HTTP " + res.status); 
-            return res.json(); 
-        })
-        .then(data => { 
-            ONLINE_TRANSLATIONS = data; 
-            IS_ONLINE_MODE = true; 
-            updateSortedKeys(); 
-            console.log("✅ 在线词典加载成功，共 " + Object.keys(data).length + " 条记录");
-        })
-        .catch(err => {
-            console.log("❌ 在线词典加载失败（将使用本地兜底）：", err.message);
-        })
-        .finally(() => {
-            clearTimeout(timeoutId);
-        });
+            // 2. 没网直接用现有的
+            if (!navigator.onLine) return;
+
+            // 3. 有网去检查最新版
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+            fetch(GITHUB_ONLINE_DICT_URL + "?t=" + Date.now(), { signal: controller.signal })
+                .then(res => { 
+                    if(!res.ok) throw new Error("HTTP " + res.status); 
+                    return res.text(); 
+                })
+                .then(text => {
+                    const data = JSON.parse(text);
+                    
+                    // 如果内容发生变化，或者之前没加载过
+                    if (!IS_ONLINE_MODE || JSON.stringify(data) !== JSON.stringify(ONLINE_TRANSLATIONS)) {
+                        ONLINE_TRANSLATIONS = data;
+                        IS_ONLINE_MODE = true;
+                        updateSortedKeys();
+                        console.log("✅ 在线词典已更新至最新版本");
+                        
+                        // 自动保存到本地
+                        if (window.AndroidNative && window.AndroidNative.saveDictLocally) {
+                            window.AndroidNative.saveDictLocally(text);
+                        }
+                    } else {
+                        console.log("✅ 在线词典已是最新版本");
+                    }
+                })
+                .catch(err => {
+                    console.log("❌ 在线词典更新失败（继续使用本地或内置词典）：", err.message);
+                })
+                .finally(() => {
+                    clearTimeout(timeoutId);
+                });
         }
+
         fetchOnlineDict();
         window.addEventListener('online', fetchOnlineDict);
 
@@ -252,7 +280,7 @@
             }
         }
 
-        // 🌟 纯正的 Python object_format.py 移植版
+        // 1:1 移植 object_format.py 的解析器
         class SkyBinaryParser {
             constructor(buffer) {
                 this.buffer = buffer;
@@ -275,7 +303,6 @@
                 this.offset++; return str;
             }
 
-            // 严格对照 Python 的 should_read_uint32_as_integer
             should_read_uint32_as_integer(name) {
                 return name === 'bstGuid' || name.includes('BstGuid');
             }
