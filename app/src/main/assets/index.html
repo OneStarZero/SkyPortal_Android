@@ -195,11 +195,32 @@
         updateSortedKeys();
 
         function fetchOnlineDict() {
-            if (!navigator.onLine) return;
-            fetch(GITHUB_ONLINE_DICT_URL + "?t=" + Date.now())
-                .then(res => { if(!res.ok) throw new Error("网络不佳"); return res.json(); })
-                .then(data => { ONLINE_TRANSLATIONS = data; IS_ONLINE_MODE = true; updateSortedKeys(); })
-                .catch(err => console.log("在线词典加载失败", err));
+    if (!navigator.onLine) {
+        console.log("离线状态，使用本地词典");
+        return;
+    }
+    
+    // 增加超时机制，避免网络慢时一直转圈
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+
+    fetch(GITHUB_ONLINE_DICT_URL + "?t=" + Date.now(), { signal: controller.signal })
+        .then(res => { 
+            if(!res.ok) throw new Error("HTTP " + res.status); 
+            return res.json(); 
+        })
+        .then(data => { 
+            ONLINE_TRANSLATIONS = data; 
+            IS_ONLINE_MODE = true; 
+            updateSortedKeys(); 
+            console.log("✅ 在线词典加载成功，共 " + Object.keys(data).length + " 条记录");
+        })
+        .catch(err => {
+            console.log("❌ 在线词典加载失败（将使用本地兜底）：", err.message);
+        })
+        .finally(() => {
+            clearTimeout(timeoutId);
+        });
         }
         fetchOnlineDict();
         window.addEventListener('online', fetchOnlineDict);
