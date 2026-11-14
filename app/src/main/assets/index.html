@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>SkyPortal - 终极节点分析</title>
+    <title>光遇传送点解析</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
     <style>
         :root {
             --bg-color: #0a0a0c;
@@ -12,77 +15,109 @@
             --text-sub: #a0a0b0;
             --accent-green: #00ffaa;
             --accent-red: #ff4466;
-            --accent-blue: #3a66ff;
+            --btn-blue: #3a66ff;
             --border-radius: 16px;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
         ::-webkit-scrollbar { width: 0px; background: transparent; }
-        html, body { height: 100%; overflow: hidden; background-color: var(--bg-color); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; display: flex; flex-direction: column; }
-        
+        html, body {
+            height: 100%; overflow: hidden; background-color: var(--bg-color); color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none; display: flex; flex-direction: column; transform: translate3d(0, 0, 0); -webkit-overflow-scrolling: touch;
+        }
+
+        /* 极光背景 */
         .aurora-bg { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0.4; }
-        .aurora-blob { position: absolute; border-radius: 50%; filter: blur(40px); animation: float 20s infinite alternate ease-in-out; }
+        .aurora-blob { position: absolute; border-radius: 50%; filter: blur(40px); animation: float 20s infinite alternate ease-in-out; will-change: transform; transform: translate3d(0, 0, 0); }
         .blob-1 { width: 200px; height: 200px; background: #00ffaa; top: -5%; left: -5%; }
-        .blob-2 { width: 250px; height: 250px; background: #3a66ff; bottom: 5%; right: -10%; }
-        @keyframes float { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+        .blob-2 { width: 250px; height: 250px; background: #3a66ff; bottom: 5%; right: -10%; animation-delay: -7s; }
+        @keyframes float { 0% { transform: translate3d(0, 0, 0) scale(1); } 100% { transform: translate3d(40px, 60px, 0) scale(1.1); } }
 
+        /* 顶部导入栏 */
         .top-bar { flex-shrink: 0; padding: 15px 15px 10px 15px; padding-top: max(15px, env(safe-area-inset-top)); z-index: 10; display: flex; flex-direction: column; gap: 10px; }
-        .btn-import { width: 100%; background: linear-gradient(135deg, #3a66ff, #6a33ff); color: white; border: none; padding: 14px; font-size: 15px; font-weight: bold; border-radius: var(--border-radius); box-shadow: 0 4px 10px rgba(58, 102, 255, 0.2); cursor: pointer; }
-        .btn-import:active { transform: scale(0.96); }
-        .btn-apk { background: linear-gradient(135deg, #00b09b, #96c93d); }
-        .btn-switch { background: linear-gradient(135deg, #ff4466, #ff8844); display: none; }
-        .btn-export { background: linear-gradient(135deg, #f59e0b, #eab308); display: none; color: #000; }
+        .btn-import {
+            width: 100%; background: linear-gradient(135deg, #3a66ff, #6a33ff); color: white; border: none;
+            padding: 16px; font-size: 16px; font-weight: bold; border-radius: var(--border-radius);
+            box-shadow: 0 4px 10px rgba(58, 102, 255, 0.2); transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform: translate3d(0, 0, 0); cursor: pointer;
+        }
+        .btn-import:active { transform: scale(0.95) translate3d(0, 0, 0); }
+        .btn-apk { background: linear-gradient(135deg, #00b09b, #96c93d); box-shadow: 0 4px 10px rgba(0, 176, 155, 0.2); }
+        
+        /* 控制栏 */
+        .action-bar { display: none; gap: 10px; margin-bottom: 5px; }
+        .btn-action { flex: 1; background: linear-gradient(135deg, #ff4466, #ff8844); color: white; border: none; padding: 12px; font-size: 14px; font-weight: bold; border-radius: var(--border-radius); cursor: pointer; }
+        .btn-export { background: linear-gradient(135deg, #f59e0b, #eab308); color: #000; }
 
-        /* 50个分类的横向滑动栏 */
-        .category-bar { display: none; gap: 8px; margin-bottom: 5px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; }
-        .category-bar::-webkit-scrollbar { height: 0px; }
-        .cat-btn { white-space: nowrap; padding: 8px 14px; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; color: #888; font-size: 13px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .cat-btn.active { background: rgba(58, 102, 255, 0.2); color: #fff; border-color: var(--accent-blue); box-shadow: 0 0 10px rgba(58, 102, 255, 0.3); }
-
+        /* 列表区域 */
         .list-container { flex: 1; overflow-y: auto; padding: 0 15px 10px 15px; position: relative; }
-        .card { background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: var(--border-radius); padding: 16px 20px; margin-bottom: 14px; position: relative; overflow: hidden; transition: transform 0.12s; box-shadow: inset 4px 0 0 0 transparent; }
-        .card:active { transform: scale(0.96); }
-        .card-anim { animation: slideIn 0.3s ease-out backwards; }
-        @keyframes slideIn { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
-        
-        .card-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; word-break: break-all; }
-        .card-level { font-size: 14px; color: #d0d0d5; margin-bottom: 10px; display: flex; }
-        .card-level::before { content: "目的地"; font-size: 12px; background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 4px; margin-right: 8px; height: fit-content; }
-        .card:not(.cat-teleport) .card-level { display: none; }
-        
-        .card-coord { font-size: 13px; font-family: monospace; color: #888; background: rgba(0, 0, 0, 0.3); padding: 6px 10px; border-radius: 8px; display: inline-block; }
+        .card {
+            background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: var(--border-radius);
+            padding: 16px 20px; margin-bottom: 14px; position: relative; overflow: hidden;
+            transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); transform: translate3d(0, 0, 0);
+            will-change: transform; box-shadow: inset 4px 0 0 0 transparent;
+        }
+        .card:active { transform: scale(0.96) translate3d(0, 0, 0); background: rgba(40, 40, 50, 0.9); }
+        .card-anim { animation: slideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+        @keyframes slideIn { 0% { opacity: 0; transform: translate3d(0, 20px, 0); } 100% { opacity: 1; transform: translate3d(0, 0, 0); } }
+        .card.enabled { box-shadow: inset 4px 0 0 0 var(--accent-green); }
+        .card.disabled { box-shadow: inset 4px 0 0 0 var(--accent-red); }
+
+        .card-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; word-break: break-all; line-height: 1.4; display: flex; align-items: center; }
+        .card.enabled .card-title { color: var(--accent-green); }
+        .card.disabled .card-title { color: var(--accent-red); }
+
+        .card-level { font-size: 14px; color: #d0d0d5; margin-bottom: 10px; line-height: 1.4; display: flex; }
+        .card-level::before { content: "目的地"; color: var(--text-sub); font-size: 12px; background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 4px; margin-right: 8px; height: fit-content; margin-top: 1px; }
+
+        .card-coord { font-size: 13px; font-family: monospace; color: #888; background: rgba(0, 0, 0, 0.3); padding: 8px 12px; border-radius: 8px; display: inline-block; letter-spacing: 0.5px; }
         .card-coord span { color: #fff; font-weight: 600; }
 
-        /* 通用卡片样式 */
-        .card.enabled { box-shadow: inset 4px 0 0 0 var(--accent-green); } .card.enabled .card-title { color: var(--accent-green); }
-        .card.disabled { box-shadow: inset 4px 0 0 0 var(--accent-red); } .card.disabled .card-title { color: var(--accent-red); }
-        .card.other { box-shadow: inset 4px 0 0 0 #888; } .card.other .card-title { color: #aaa; }
-
+        /* 搜索与选项卡 */
         .search-bar { flex-shrink: 0; padding: 0 15px 10px 15px; display: none; }
-        .search-input-wrap { background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--border-radius); display: flex; align-items: center; padding: 0 15px; }
-        .search-input-wrap input { flex: 1; background: transparent; border: none; color: white; padding: 12px 0; font-size: 15px; outline: none; }
-        .btn-clear { background: none; border: none; color: #888; font-size: 20px; display: none; }
+        .search-input-wrap { background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--border-radius); display: flex; align-items: center; padding: 0 15px; transition: border-color 0.2s; }
+        .search-input-wrap:focus-within { border-color: var(--btn-blue); }
+        .search-input-wrap input { flex: 1; background: transparent; border: none; color: white; padding: 15px 0; font-size: 15px; outline: none; }
+        .btn-clear { background: none; border: none; color: #888; font-size: 20px; padding: 10px; display: none; }
 
-        .tabs { flex-shrink: 0; padding: 10px 15px; padding-bottom: max(15px, env(safe-area-inset-bottom)); display: none; gap: 12px; }
-        .tab-btn { flex: 1; padding: 14px; border: none; border-radius: var(--border-radius); font-size: 15px; font-weight: 600; background: var(--card-bg); color: #888; }
-        .tab-btn.active-avail { background: rgba(0, 255, 170, 0.1); color: var(--accent-green); }
-        .tab-btn.active-dis { background: rgba(255, 68, 102, 0.1); color: var(--accent-red); }
+        .tabs { flex-shrink: 0; padding: 10px 15px; padding-bottom: max(15px, env(safe-area-inset-bottom)); display: none; gap: 12px; background: var(--bg-color); }
+        .tab-btn { flex: 1; padding: 14px; border: none; border-radius: var(--border-radius); font-size: 15px; font-weight: 600; background: var(--card-bg); color: #888; border: 1px solid rgba(255, 255, 255, 0.05); transition: 0.2s; transform: translate3d(0, 0, 0); }
+        .tab-btn:active { transform: scale(0.95) translate3d(0, 0, 0); }
+        .tab-btn.active-avail { background: rgba(0, 255, 170, 0.1); color: var(--accent-green); border-color: rgba(0, 255, 170, 0.2); }
+        .tab-btn.active-dis { background: rgba(255, 68, 102, 0.1); color: var(--accent-red); border-color: rgba(255, 68, 102, 0.2); }
 
-        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background: rgba(40, 40, 50, 0.95); color: white; padding: 16px 32px; border-radius: 40px; font-size: 16px; opacity: 0; pointer-events: none; transition: 0.2s; z-index: 999; }
+        /* 弹窗与动画 */
+        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background: rgba(40, 40, 50, 0.95); color: white; padding: 16px 32px; border-radius: 40px; font-size: 16px; font-weight: bold; opacity: 0; pointer-events: none; transition: 0.2s; z-index: 999; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
         .toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
+        .ripple { position: absolute; border-radius: 50%; background-color: rgba(255, 255, 255, 0.15); transform: scale(0); animation: ripple-anim 0.4s ease-out; pointer-events: none; }
+        @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+
+        .skeleton { background: #1a1a20; border-radius: var(--border-radius); height: 110px; margin-bottom: 14px; position: relative; overflow: hidden; }
+        .skeleton::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent); animation: shimmer 1.2s infinite; transform: translate3d(-100%, 0, 0); }
+        @keyframes shimmer { 100% { transform: translate3d(100%, 0, 0); } }
+
+        /* 原生 App 选择器 */
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: none; align-items: flex-start; justify-content: center; }
         .modal-overlay.show { display: flex; }
         .app-selector { background: #121212; width: 100%; height: 100%; display: flex; flex-direction: column; }
-        .app-header { background: #3f51b5; padding: max(15px, env(safe-area-inset-top)) 15px 15px 15px; display: flex; align-items: center; gap: 15px; }
-        .app-back-btn { background: none; border: none; color: white; font-size: 24px; }
+        .app-header { background: #3f51b5; padding: max(15px, env(safe-area-inset-top)) 15px 15px 15px; display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
+        .app-back-btn { background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0 10px; }
         .app-title { color: white; font-size: 18px; font-weight: bold; }
         .app-list { flex: 1; overflow-y: auto; background: #000; }
-        .app-item { display: flex; align-items: center; padding: 15px 20px; border-bottom: 1px solid #222; }
-        .app-icon { width: 45px; height: 45px; border-radius: 8px; background: #333; margin-right: 15px; }
+        .app-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #222; cursor: pointer; }
+        .app-item:active { background: #1a1a1a; }
+        .app-icon { width: 45px; height: 45px; border-radius: 8px; background: #333; object-fit: cover; margin-right: 15px; }
         .app-info { display: flex; flex-direction: column; }
         .app-name { color: #fff; font-size: 16px; font-weight: bold; margin-bottom: 4px; }
         .app-pkg { color: #888; font-size: 13px; }
-        .loading { text-align: center; color: #888; padding: 20px; font-size: 14px; }
+
+        .fallback-modal { background: #1c1c23; width: 85%; max-width: 400px; border-radius: var(--border-radius); padding: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.1); margin-top: 20vh; }
+        .fallback-modal h3 { margin-bottom: 15px; font-size: 18px; color: #fff; }
+        .fallback-modal p { color: #aaa; font-size: 14px; margin-bottom: 20px; line-height: 1.5; text-align: left; }
+        .modal-btn { padding: 14px; border-radius: 10px; border: none; background: var(--card-bg); color: white; font-size: 15px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); width: 100%; margin-top: 10px; font-weight: bold; }
+        .modal-btn:active { background: #333; }
     </style>
 </head>
 <body>
@@ -95,26 +130,28 @@
     <div class="top-bar">
         <button class="btn-import" id="importBtn">📂 导入光遇 JSON 文件</button>
         <input type="file" id="fileInput" accept="*/*" style="display: none;">
-        <button class="btn-import btn-apk" id="importApkBtn">📱 读取已安装应用 (光遇)</button>
-        <button class="btn-import btn-switch" id="switchMapBtn">🔄 切换地图关卡</button>
-        <button class="btn-import btn-export" id="exportJsonBtn">💾 保存导出当前 JSON</button>
         
-        <!-- 动态生成的分类栏 -->
-        <div class="category-bar" id="categoryBar"></div>
+        <button class="btn-import btn-apk" id="importApkBtn">📱 读取已安装应用</button>
+        
+        <div class="action-bar" id="actionBar">
+            <!-- 默认隐藏切换按钮，只有在读取APK后才显示 -->
+            <button class="btn-action" id="switchMapBtn" style="display: none;">🔄 切换地图关卡</button>
+            <button class="btn-action btn-export" id="exportJsonBtn">💾 导出 JSON</button>
+        </div>
     </div>
 
     <div class="list-container" id="listContainer"></div>
 
     <div class="search-bar" id="searchBar">
         <div class="search-input-wrap">
-            <input type="text" id="searchInput" placeholder="搜索名称或目的地...">
+            <input type="text" id="searchInput" placeholder="搜索传送点或目的地...">
             <button class="btn-clear" id="btnClear">×</button>
         </div>
     </div>
 
     <div class="tabs" id="tabs">
-        <button class="tab-btn active-avail" id="tabAvail">可用 (0)</button>
-        <button class="tab-btn" id="tabDis">禁用 (0)</button>
+        <button class="tab-btn active-avail" id="tabAvail">可用传送点 (0)</button>
+        <button class="tab-btn" id="tabDis">禁用传送点 (0)</button>
     </div>
 
     <div class="toast" id="toast">已复制到剪贴板！</div>
@@ -122,19 +159,31 @@
     <div class="modal-overlay" id="nativeAppModal">
         <div class="app-selector">
             <div class="app-header">
-                <button class="app-back-btn" onclick="document.getElementById('nativeAppModal').classList.remove('show')">←</button>
-                <div class="app-title" id="modalTitle">选择测试程序</div>
+                <button class="app-back-btn" onclick="closeNativeAppModal()">←</button>
+                <div class="app-title">选择测试程序</div>
             </div>
-            <div class="app-list" id="appList">
-                <div class="loading">正在获取应用列表...</div>
-            </div>
+            <div class="app-list" id="appList"></div>
         </div>
     </div>
 
+    <div class="modal-overlay" id="fallbackModal" style="align-items: center;">
+        <div class="fallback-modal">
+            <h3>受限环境</h3>
+            <p>由于浏览器安全沙箱限制，纯网页无法直接扫描手机里的已安装应用列表。<br><br>如果您在 App 中使用，此界面将自动读取您的应用。当前环境下，请手动选择 APK 文件进行解析。</p>
+            <button class="modal-btn" onclick="triggerFileUpload()">📂 手动选择 APK 文件</button>
+            <button class="modal-btn" onclick="document.getElementById('fallbackModal').classList.remove('show')" style="color: #888; background: transparent;">取消</button>
+        </div>
+    </div>
+
+    <input type="file" id="fileApkInput" accept=".apk" style="display: none;">
+
     <script>
         const GITHUB_ONLINE_DICT_URL = "https://raw.githubusercontent.com/OneStarZero/Sky-Portal-preview/refs/heads/main/online_dict.json"; 
+        
         const LOCAL_TRANSLATIONS = {
-            "CandleSpace": "遇境", "Dawn": "晨岛", "StormEvent_VoidSpace": "暴风眼·虚空空间", "MainStreet": "云巢", "MainStreetFlyingIntro": "云巢·飞行引导", "MainStreet_ShopOutfits": "云巢·服装店", "MainStreet_ShopSpells": "云巢·魔法商店", "MainStreet_ShopProps": "云巢·道具店", "MainStreet_Apartment": "云巢·公寓", "MainStreet_Cafe": "云巢·咖啡厅", "MainStreet_ConcertHall": "云巢·音乐堂", "MainStreet_FunArmada": "云巢·游乐场", "MainStreet_Soundbath": "云巢·声音浴", "MainStreet_Cafe_Wonderland": "云巢·仙境咖啡厅", "MainStreet_StorySpace": "云巢·故事空间", "Event_Cinema": "活动·剧场", "Night_IPHallway": "禁阁·走廊", "Prairie_ButterflyFields": "云野·蝴蝶平原", "Prairie_Cave": "云野·洞穴", "Prairie_NestAndKeeper": "云野·鸟巢与圣岛", "Prairie_Island": "云野·圣岛", "Prairie_Village": "云野·三塔图", "Prairie_WildLifePark": "云野·野生动物园", "DayHubCave": "白日中心洞穴", "DayEnd": "晨岛·终点", "Rain": "雨林", "RainForest": "雨林", "RainMid": "雨林·中段", "RainShelter": "雨林·树屋", "Rain_Cave": "雨林·洞穴", "Rain_BaseCamp": "雨林·营地", "RainEnd": "雨林·终点", "Skyway": "云道", "Sunset": "霞谷", "SunsetRace": "霞谷·赛道", "Sunset_Citadel": "霞谷·霞光城", "Sunset_FlyRace": "霞谷·飞行赛道", "SunsetEnd": "霞谷·终点", "SunsetColosseum": "霞谷·竞技场", "SunsetEnd2": "霞谷·终点深处", "SunsetVillage": "霞谷·村落", "SunsetVillage_MusicShop": "霞谷·音乐商店", "Sunset_YetiPark": "霞谷·隐士山谷", "Sunset_Theater": "霞谷·圆梦村剧场", "Event_HidenSeek_SnowVillage": "活动·捉迷藏雪村", "DuskStart": "暮土·起点", "Dusk": "暮土", "Dusk_Triangle": "暮土·三角地带", "Dusk_TriangleEnd": "暮土·三角终点", "DuskOasis": "暮土·绿洲", "DuskGraveyard": "暮土·四龙图", "Dusk_CrabField": "暮土·螃蟹田", "DuskMid": "暮土·中段", "DuskEnd": "暮土·终点", "Nintendo_CandleSpace": "任天堂遇境", "Event_WerewolfGame": "活动·狼人杀", "Night": "禁阁", "NightArchive": "禁阁·档案馆", "Night2": "禁阁(二层)", "NightEnd": "禁阁·终点", "TGCOffice": "TGC办公室", "Event_Personality": "活动·性格测试", "VoidSharedSpace": "虚空共享空间", "Event_DaysOfMischief": "活动·恶作剧之日", "Event_DaysOfMischief_Escape": "活动·恶作剧逃脱", "UndergroundOffice": "地下办公室", "DawnCave": "晨岛·洞穴", "Dawn_TrialsWater": "晨岛·水之试炼", "Dawn_TrialsEarth": "晨岛·地之试炼", "Dawn_TrialsAir": "晨岛·风之试炼", "Dawn_TrialsFire": "晨岛·火之试炼", "NightDesert": "禁阁·星漠", "NightDesert_Planets": "禁阁·星漠行星", "NightDesert_Beach": "禁阁·星漠海滩", "Night_InfiniteDesert": "禁阁·无尽沙漠", "Night_JarCave": "禁阁·罐子洞穴", "Night_Shelter": "禁阁·庇护所", "Event_Arr_Runaway": "欧若拉·逃跑", "Event_Arr_SoftInside": "欧若拉·柔软内心", "Event_Arr_Warrior": "欧若拉·战士", "Event_Arr_TheSeed": "欧若拉·种子", "Event_Arr_EyesOfAChild": "欧若拉·孩童之眼", "Event_Arr_ExhaleInhale": "欧若拉·呼吸", "Night_PaintedWorld": "禁阁·彩绘世界", "Event_DaysOfMoonlight_HugeMoon": "活动·月光日(巨月)", "Season24Void1": "第24赛季虚空", "Night_StoryBook": "禁阁·故事书", "Night_ValleyForest": "禁阁·山谷森林", "Night_ValleyHouse": "禁阁·山谷房屋", "Night_ValleyHouseSky": "禁阁·山谷天空", "Rain_BlueBirdTheater": "雨林·青鸟剧场", "DuskMid_Past": "暮土·中段(废弃)", "DuskMid_PastMarket": "暮土·中段废弃集市", "Dusk_HiddenTemple": "暮土·隐藏神庙", "DuskEnd_Past": "暮土·终点(废弃)", "Night_Jumble": "禁阁·杂物间", "Night_Workshop": "禁阁·工作室", "Night_GO_City": "云巢·竞速城市", "Night_GO_Farm": "云巢·竞速农场", "Night_GO_Field": "云巢·竞速田野", "Night_GO_Gallery": "云巢·竞速画廊", "Night_GO_Island": "云巢·竞速岛屿", "Nest_Night_GO_Town": "云巢·竞速家园", "Night_GO_Town": "云巢·竞速小镇", "Night_GO_Tree": "云巢·竞速树木", "Dusk_PearlIsland": "暮土·珍珠岛", "Dusk_PearlSea": "暮土·珍珠海", "StormStart": "暴风眼·起点", "Storm": "暴风眼", "StormEnd": "暴风眼·终点", "OrbitMid": "重生之路·中段", "OrbitEnd": "伊甸之眼(终点)", "CandleSpaceEnd": "遇境·终点", "Credits": "制作人员名单", "AR_TestLevel": "AR·测试关卡", "AR_WheatField": "AR·麦田", "AR_Bedroom": "AR·卧室", "WorldEmpty": "空世界"
+            "CandleSpace": "遇境", "Dawn": "晨岛", "MainStreet": "云巢", "Night_IPHallway": "禁阁·走廊", 
+            "Prairie_ButterflyFields": "云野·蝴蝶平原", "Prairie_Island": "云野·圣岛", "Rain": "雨林", 
+            "Sunset": "霞谷", "Dusk": "暮土", "Night": "禁阁", "Storm": "暴风眼", "OrbitEnd": "伊甸之眼"
         };
 
         let ONLINE_TRANSLATIONS = {}; 
@@ -292,51 +341,11 @@
             }
         }
 
-        // =====================================================================
-        // 3. 50种细分类型定义与提取引擎
-        // =====================================================================
-        // 支持高亮和细分的 50 种类型（按优先级匹配）
-        const CATEGORIES = [
-            { id: 'teleport', name: '🚪 传送点' },
-            { id: 'wing', name: '✨ 光翼/先祖', keys: ['wing', 'spirit', 'childoflight', 'elder', 'ancestor'] },
-            { id: 'candle', name: '🕯️ 蜡烛/资源', keys: ['candle', 'treasure', 'piece', 'resource'] },
-            { id: 'audio', name: '🎵 声音/音效', keys: ['audio', 'sound', 'music', 'ambience', 'voice'] },
-            { id: 'anim', name: '🎬 动画/特效', keys: ['anim', 'fx', 'particle', 'effect', 'visual'] },
-            { id: 'model', name: '🧱 模型/网格', keys: ['mesh', 'model', 'prop', 'geometry', 'shape'] },
-            { id: 'light', name: '💡 光源/环境', keys: ['light', 'sky', 'cloud', 'env', 'fog', 'beam'] },
-            { id: 'trigger', name: '💥 触发器/碰撞', keys: ['trigger', 'collide', 'area', 'zone', 'boundary'] },
-            { id: 'logic', name: '⚙️ 逻辑/动作', keys: ['logic', 'action', 'event', 'script', 'rule', 'condition'] },
-            { id: 'other', name: '📦 其他未知' } // 兜底
-        ];
-
-        // 生成 UI 分类按钮
-        const categoryBar = document.getElementById('categoryBar');
-        CATEGORIES.forEach((cat, index) => {
-            let btn = document.createElement('button');
-            btn.className = `cat-btn ${index === 0 ? 'active' : ''}`;
-            btn.innerText = cat.name;
-            btn.dataset.cat = cat.id;
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                switchCategory(cat.id);
-            });
-            categoryBar.appendChild(btn);
-        });
-
-        // 状态存储
-        let parsedData = {
-            categories: {}
-        };
-        CATEGORIES.forEach(c => parsedData.categories[c.id] = []); // teleport 另算
-
-        parsedData.categories['teleport'] = { enabled: [], disabled: [] };
-
-        let currentCategory = 'teleport';
+        let parsedData = { enabled: [], disabled: [] };
         let currentTab = 'enabled';
-        let cachedLevels = []; 
         let currentJsonData = null; 
-        let currentLevelName = ""; 
+        let currentLevelName = "";
+        let currentApkZip = null;
 
         const importBtn = document.getElementById('importBtn');
         const fileInput = document.getElementById('fileInput');
@@ -348,17 +357,19 @@
         const tabAvail = document.getElementById('tabAvail');
         const tabDis = document.getElementById('tabDis');
         const toast = document.getElementById('toast');
+        const actionBar = document.getElementById('actionBar');
 
         const importApkBtn = document.getElementById('importApkBtn');
         const switchMapBtn = document.getElementById('switchMapBtn'); 
         const exportJsonBtn = document.getElementById('exportJsonBtn');
         const nativeAppModal = document.getElementById('nativeAppModal');
         const appListContainer = document.getElementById('appList');
-        const modalTitle = document.getElementById('modalTitle');
+        const fallbackModal = document.getElementById('fallbackModal');
 
         document.body.addEventListener('touchstart', initAudio, { once: true, passive: true });
         document.body.addEventListener('mousedown', initAudio, { once: true });
 
+        // 1. 本地 JSON 导入
         importBtn.addEventListener('click', () => { 
             if (importBtn.innerText.includes("正在解析")) return;
             playSound('tap'); fileInput.value = ''; fileInput.click(); 
@@ -367,13 +378,22 @@
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            listContainer.innerHTML = `<div style="text-align:center;padding:20px;color:#666;">解析中...</div>`;
+            listContainer.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
             importBtn.innerText = "⏳ 正在解析...";
             const reader = new FileReader();
             reader.onload = (event) => { 
                 try { 
                     const json = JSON.parse(event.target.result);
-                    applyJsonData(json, file.name.replace('.json',''));
+                    
+                    // 🔄 修复：本地 JSON 导入不隐藏按钮，只展示导出
+                    currentApkZip = null; // 清除 APK 缓存，确保不能切换地图
+                    switchMapBtn.style.display = "none"; 
+                    actionBar.style.display = "flex"; 
+
+                    currentJsonData = json;
+                    currentLevelName = file.name.replace('.json','');
+                    processData(json);
+
                     playSound('success'); 
                     importBtn.innerText = "📂 导入光遇 JSON 文件"; 
                 } 
@@ -382,26 +402,110 @@
             reader.readAsText(file);
         });
 
+        // 2. 原生应用读取
         importApkBtn.addEventListener('click', () => {
             playSound('tap');
             if (window.AndroidNative && window.AndroidNative.getInstalledApps) {
-                nativeAppModal.classList.add('show');
-                modalTitle.innerText = "选择测试程序";
-                appListContainer.innerHTML = `<div class="loading">正在获取应用列表...</div>`;
                 window.AndroidNative.getInstalledApps();
             } else {
-                alert("当前环境不是原生 App，无法扫描应用列表。");
+                fallbackModal.classList.add('show');
             }
         });
 
+        function closeNativeAppModal() { nativeAppModal.classList.remove('show'); }
+        function triggerFileUpload() { fallbackModal.classList.remove('show'); fileInput.value = ''; fileInput.click(); }
+
+        window.showNativeApps = function(apps) {
+            if (!apps || apps.length === 0) return alert("未获取到应用");
+            appListContainer.innerHTML = "";
+            apps.forEach(app => {
+                let item = document.createElement('div');
+                item.className = 'app-item';
+                item.innerHTML = `
+                    <img class="app-icon" src="${app.icon || ''}" onerror="this.style.display='none'">
+                    <div class="app-info">
+                        <div class="app-name">${app.appName}</div>
+                        <div class="app-pkg">${app.packageName}</div>
+                    </div>
+                `;
+                item.addEventListener('click', () => {
+                    playSound('tap'); closeNativeAppModal();
+                    importApkBtn.innerText = "⏳ 正在提取数据...";
+                    if (window.AndroidNative && window.AndroidNative.loadApkFromPath) {
+                        window.AndroidNative.loadApkFromPath(app.apkPath);
+                    }
+                });
+                appListContainer.appendChild(item);
+            });
+            nativeAppModal.classList.add('show');
+        };
+
+        window.loadApkDataFromNative = async function(arrayBuffer) {
+            try {
+                currentApkZip = await JSZip.loadAsync(arrayBuffer);
+                showLevelSelection();
+            } catch (err) {
+                alert("解析原生 APK 数据失败：" + err.message);
+                importApkBtn.innerText = "📱 读取已安装应用";
+            }
+        };
+
+        // 3. 选择关卡
+        function showLevelSelection() {
+            let validLevelsFound = [];
+            currentApkZip.forEach((relativePath, zipEntry) => {
+                if (relativePath.startsWith('Data/Levels/') && relativePath.endsWith('/Objects.level.bin')) {
+                    let parts = relativePath.split('/');
+                    validLevelsFound.push({ name: parts[parts.length - 2], path: relativePath });
+                }
+            });
+
+            if (validLevelsFound.length === 0) return alert("APK 中未找到地图文件");
+            validLevelsFound.sort((a, b) => a.name.localeCompare(b.name));
+            
+            appListContainer.innerHTML = "";
+            document.querySelector('.app-title').innerText = "选择地图关卡";
+            validLevelsFound.forEach(level => {
+                let item = document.createElement('div');
+                item.className = 'app-item';
+                item.innerHTML = `<div class="app-name" style="color:#00ffaa;">${translateLevel(level.name)}</div>`;
+                item.addEventListener('click', () => {
+                    playSound('tap'); closeNativeAppModal();
+                    parseApkLevel(level);
+                });
+                appListContainer.appendChild(item);
+            });
+            nativeAppModal.classList.add('show');
+            importApkBtn.innerText = "✅ 选择地图解析";
+        }
+
+        async function parseApkLevel(levelInfo) {
+            listContainer.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
+            try {
+                const binData = await currentApkZip.file(levelInfo.path).async("arraybuffer");
+                const parser = new SkyBinaryParser(binData);
+                const jsonData = parser.parse();
+                
+                // 🟢 修复：APP解析时显示切换地图按钮
+                currentJsonData = jsonData;
+                currentLevelName = levelInfo.name;
+                switchMapBtn.style.display = "block"; // 这里显示
+                actionBar.style.display = "flex";
+
+                processData(jsonData);
+                importApkBtn.innerText = "📱 读取已安装应用";
+                playSound('success');
+            } catch (err) {
+                console.error(err); alert("解析失败：" + err.message);
+                importApkBtn.innerText = "📱 读取已安装应用"; listContainer.innerHTML = "";
+            }
+        }
+
+        // 4. 导出功能
         switchMapBtn.addEventListener('click', () => {
             playSound('tap');
-            if (cachedLevels.length > 0) {
-                renderLevelList(cachedLevels);
-                nativeAppModal.classList.add('show');
-            } else {
-                alert("暂无缓存的地图，请重新读取 APK");
-            }
+            if (currentApkZip) showLevelSelection();
+            else alert("请先读取 APK 文件");
         });
 
         exportJsonBtn.addEventListener('click', () => {
@@ -416,232 +520,69 @@
                 const blob = new Blob([jsonStr], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url; a.download = fileName;
-                document.body.appendChild(a); a.click();
-                document.body.removeChild(a);
+                a.href = url; a.download = fileName; a.click();
                 URL.revokeObjectURL(url);
+                showToast("JSON 已下载");
             }
         });
 
-        window.showNativeApps = function(apps) {
-            if (!apps || apps.length === 0) {
-                appListContainer.innerHTML = `<div class="loading">未获取到应用</div>`;
-                return;
-            }
-            appListContainer.innerHTML = "";
-            apps.forEach(app => {
-                let item = document.createElement('div');
-                item.className = 'app-item';
-                item.innerHTML = `
-                    <img class="app-icon" src="${app.icon || ''}" onerror="this.style.display='none'">
-                    <div class="app-info">
-                        <div class="app-name">${app.appName}</div>
-                        <div class="app-pkg">${app.packageName}</div>
-                    </div>
-                `;
-                item.addEventListener('click', () => {
-                    playSound('tap');
-                    modalTitle.innerText = "正在读取关卡...";
-                    appListContainer.innerHTML = `<div class="loading">正在深度扫描 APK (含分包) 内部地图数据...</div>`;
-                    window.AndroidNative.getApkLevels(app.packageName);
-                });
-                appListContainer.appendChild(item);
-            });
-        };
-
-        window.showApkLevels = function(levels) {
-            if (!levels || levels.length === 0) {
-                appListContainer.innerHTML = `<div class="loading">该应用未找到地图文件<br>可能是应用被加密或非光遇包</div>`;
-                return;
-            }
-            cachedLevels = levels;
-            renderLevelList(levels);
-        };
-
-        function renderLevelList(levels) {
-            modalTitle.innerText = `选择要解析的关卡 (${levels.length})`;
-            appListContainer.innerHTML = "";
-            
-            let uniqueLevels = [];
-            let map = new Set();
-            levels.forEach(l => {
-                if(!map.has(l.levelName)) {
-                    map.add(l.levelName);
-                    uniqueLevels.push(l);
-                }
-            });
-            uniqueLevels.sort((a, b) => a.levelName.localeCompare(b.levelName));
-            
-            uniqueLevels.forEach(level => {
-                let item = document.createElement('div');
-                item.className = 'app-item';
-                item.innerHTML = `<div class="app-name" style="color:#00ffaa;">${translateLevel(level.levelName)}</div>`;
-                item.addEventListener('click', () => {
-                    playSound('tap');
-                    nativeAppModal.classList.remove('show');
-                    listContainer.innerHTML = `<div style="text-align:center;padding:20px;color:#666;">正在提取并解析二进制...</div>`;
-                    window.AndroidNative.extractLevelData(level.apkPath, level.entryName, level.levelName);
-                });
-                appListContainer.appendChild(item);
-            });
-            nativeAppModal.classList.add('show');
-        }
-
-        window.loadLevelData = function(base64Data, levelName) {
-            try {
-                const binaryString = window.atob(base64Data);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-
-                const parser = new SkyBinaryParser(bytes.buffer);
-                const jsonData = parser.parse();
-
-                applyJsonData(jsonData, levelName);
-                playSound('success');
-
-            } catch (err) {
-                console.error(err);
-                alert("解析失败：" + err.message);
-                listContainer.innerHTML = "";
-            }
-        };
-
-        function applyJsonData(jsonData, levelName) {
-            currentJsonData = jsonData;
-            currentLevelName = levelName;
-
-            importApkBtn.style.display = "none";
-            switchMapBtn.style.display = "block";
-            exportJsonBtn.style.display = "block";
-            categoryBar.style.display = "flex";
-
-            extractAndClassifyNodes(jsonData, levelName);
-        }
-
         // =====================================================================
-        // 终极 50 种分类解析
+        // 5. 数据分流与渲染
         // =====================================================================
-        function extractAndClassifyNodes(jsonData, levelName = "") { 
-            // 清空所有分类数据
-            CATEGORIES.forEach(c => {
-                if (c.id === 'teleport') parsedData.categories['teleport'] = { enabled: [], disabled: [] };
-                else parsedData.categories[c.id] = [];
-            });
-            
-            const bstNodes = jsonData.BSTNodes || {};
-            
+        function processData(data) { 
+            parsedData.enabled = [];
+            parsedData.disabled = [];
+            const bstNodes = data.BSTNodes || {};
+
             for (let key in bstNodes) {
                 let node = bstNodes[key];
-                if (!node || typeof node !== 'object') continue;
-
-                // 查找 LevelLink 引用
-                let linkRef = node.LevelLink || node['[CLUMP]LevelLink'];
-                if (!linkRef) continue;
-
-                let links = Array.isArray(linkRef) ? linkRef : [linkRef];
+                if (!node || !node.LevelLink) continue;
                 
-                for (let i = 0; i < links.length; i++) {
-                    let linkItem = links[i];
-                    let linkData = null;
-                    let sourceNode = node;
-                    
-                    // 解引用
-                    if (typeof linkItem === 'string' && bstNodes[linkItem]) {
-                        linkData = bstNodes[linkItem].LevelLink || bstNodes[linkItem]['[CLUMP]LevelLink'] || bstNodes[linkItem];
-                        sourceNode = bstNodes[linkItem];
-                    } else if (typeof linkItem === 'object') {
-                        linkData = linkItem.LevelLink || linkItem['[CLUMP]LevelLink'] || linkItem;
-                    }
+                let link = node.LevelLink;
+                let tf = link.transform;
+                if (!tf) continue;
 
-                    if (!linkData || typeof linkData !== 'object') continue;
-
-                    let tf = linkData.transform || linkData.Transform;
-                    if (!tf) continue;
-
-                    // 提取坐标
-                    let mx = 0, my = 0, mz = 0;
-                    try {
-                        if (Array.isArray(tf) && tf.length >= 4) {
-                            mx = parseFloat(tf[3][0]); my = parseFloat(tf[3][1]); mz = parseFloat(tf[3][2]);
-                            if (mx === 0 && my === 0 && mz === 0) {
-                                mx = parseFloat(tf[0][3]); my = parseFloat(tf[1][3]); mz = parseFloat(tf[2][3]);
-                            }
-                        } else if (tf && typeof tf === 'object' && tf.pos) {
-                            mx = parseFloat(tf.pos.x || tf.pos[0] || 0);
-                            my = parseFloat(tf.pos.y || tf.pos[1] || 0);
-                            mz = parseFloat(tf.pos.z || tf.pos[2] || 0);
+                let mx = 0, my = 0, mz = 0;
+                try {
+                    if (Array.isArray(tf) && tf.length >= 4) {
+                        mx = parseFloat(tf[3][0]); my = parseFloat(tf[3][1]); mz = parseFloat(tf[3][2]);
+                        if (mx === 0 && my === 0 && mz === 0) {
+                            mx = parseFloat(tf[0][3]); my = parseFloat(tf[1][3]); mz = parseFloat(tf[2][3]);
                         }
-                    } catch (e) { }
-                    if (isNaN(mx)) mx = 0;
-
-                    // 提取名字与目的地
-                    let targetLevel = linkData.levelName || linkData.LevelName || sourceNode.levelName || sourceNode.LevelName || node.levelName || node.LevelName;
-                    let targetName = linkData.linkName || linkData.LinkName || sourceNode.linkName || sourceNode.LinkName || node.linkName || node.LinkName || key;
-                    
-                    let item = { 
-                        name: targetName, 
-                        level: translateLevel(targetLevel || "未知"), 
-                        x: mx.toFixed(1), 
-                        z: my.toFixed(1), 
-                        y: mz.toFixed(1) 
-                    };
-
-                    if (targetLevel) {
-                        // 有 levelName 的绝对是传送点
-                        let isEnabled = linkData.enabled === true || linkData.enabled === 1 || linkData.Enabled === true || sourceNode.enabled === true || node.enabled === true;
-                        if (isEnabled) parsedData.categories['teleport'].enabled.push(item);
-                        else parsedData.categories['teleport'].disabled.push(item);
-                    } else {
-                        // 没有 levelName 的，根据 key 和属性特征归类
-                        let classifyStr = JSON.stringify(linkData).toLowerCase() + "_" + key.toLowerCase();
-                        let foundCat = 'other';
-                        
-                        for (let c of CATEGORIES) {
-                            if (c.id === 'teleport' || c.id === 'other') continue;
-                            if (c.keys && c.keys.some(k => classifyStr.includes(k))) {
-                                foundCat = c.id;
-                                break;
-                            }
-                        }
-                        parsedData.categories[foundCat].push(item);
                     }
+                } catch (e) { continue; }
+                if (mx === 0 && my === 0 && mz === 0) continue;
+
+                let translatedLevel = translateLevel(link.levelName || "未知");
+                let item = { 
+                    name: link.linkName || "未知", 
+                    level: translatedLevel, 
+                    x: mx.toFixed(1), z: my.toFixed(1), y: mz.toFixed(1) 
+                };
+
+                if (link.enabled === true || link.enabled === 1 || link.enabled === "true") {
+                    parsedData.enabled.push(item);
+                } else {
+                    parsedData.disabled.push(item);
                 }
             }
 
-            // 去重并渲染
             searchBar.style.display = "block";
-            switchCategory('teleport');
-        }
-
-        function switchCategory(cat) {
-            currentCategory = cat;
-            // 更新分类栏的高亮状态
-            document.querySelectorAll('.cat-btn').forEach(btn => {
-                if (btn.dataset.cat === cat) btn.classList.add('active');
-                else btn.classList.remove('active');
-            });
-
-            if (cat === 'teleport') {
-                tabs.style.display = "flex";
-                switchTab(currentTab);
-            } else {
-                tabs.style.display = "none";
-                renderList();
-            }
+            tabs.style.display = "flex";
+            
+            tabAvail.innerText = `可用 (${parsedData.enabled.length})`;
+            tabDis.innerText = `禁用 (${parsedData.disabled.length})`;
+            
+            switchTab('enabled');
         }
 
         tabAvail.addEventListener('click', () => { playSound('tab'); switchTab('enabled'); });
         tabDis.addEventListener('click', () => { playSound('tab'); switchTab('disabled'); });
 
         function switchTab(type) {
-            if (currentCategory !== 'teleport') return;
             currentTab = type;
             if (type === 'enabled') { tabAvail.className = "tab-btn active-avail"; tabDis.className = "tab-btn"; } 
             else { tabAvail.className = "tab-btn"; tabDis.className = "tab-btn active-dis"; }
-            
-            tabAvail.innerText = `可用 (${parsedData.categories['teleport'].enabled.length})`;
-            tabDis.innerText = `禁用 (${parsedData.categories['teleport'].disabled.length})`;
             renderList();
         }
 
@@ -651,31 +592,21 @@
 
         function renderList() {
             const fragment = document.createDocumentFragment();
-            let sourceData = [];
-            let cssClass = currentCategory;
-
-            if (currentCategory === 'teleport') {
-                sourceData = currentTab === 'enabled' ? parsedData.categories['teleport'].enabled : parsedData.categories['teleport'].disabled;
-                cssClass = currentTab; // enabled 或 disabled
-            } else {
-                sourceData = parsedData.categories[currentCategory] || [];
-            }
-
-            // 搜索过滤
+            let sourceData = currentTab === 'enabled' ? parsedData.enabled : parsedData.disabled;
             let keyword = searchInput.value.trim().toLowerCase();
             if (keyword) sourceData = sourceData.filter(item => item.name.toLowerCase().includes(keyword) || item.level.toLowerCase().includes(keyword));
 
             if (sourceData.length === 0) { 
-                listContainer.innerHTML = `<div style="text-align:center; color:#666; margin-top:50px;">当前分类下没有实体</div>`; 
+                listContainer.innerHTML = `<div style="text-align:center; color:#666; margin-top:50px;">没有找到匹配的传送点</div>`; 
                 return; 
             }
 
             sourceData.forEach((item, index) => {
                 let card = document.createElement('div');
-                card.className = `card ${cssClass} card-anim`;
+                card.className = `card ${currentTab} card-anim`;
                 card.style.animationDelay = `${Math.min(index * 0.015, 0.3)}s`; 
                 card.innerHTML = `
-                    <div class="card-title">${currentCategory === 'teleport' ? `[${cssClass === 'enabled' ? '可用' : '不可用'}]` : ''} ${item.name}</div>
+                    <div class="card-title">[${currentTab === 'enabled' ? '可用' : '不可用'}] ${item.name}</div>
                     <div class="card-level">${item.level}</div>
                     <div class="card-coord">X <span>${item.x}</span> | Z <span>${item.z}</span> | Y <span>${item.y}</span></div>
                 `;
@@ -707,7 +638,7 @@
         }
 
         function copyToClipboard(item) {
-            const text = `${item.name} | 坐标: X ${item.x}, Z ${item.z}, Y ${item.y}`;
+            const text = `${item.name} | 目的地: ${item.level} | 坐标: X ${item.x}, Z ${item.z}, Y ${item.y}`;
             if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(showToast);
             else {
                 let textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed";
@@ -717,7 +648,7 @@
             }
         }
 
-        function showToast() { if (navigator.vibrate) navigator.vibrate([30, 50, 30]); toast.classList.add('show'); setTimeout(() => { toast.classList.remove('show'); }, 2000); }
+        function showToast(msg = "已复制到剪贴板！") { if (navigator.vibrate) navigator.vibrate([30, 50, 30]); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => { toast.classList.remove('show'); }, 2000); }
     </script>
 </body>
 </html>
