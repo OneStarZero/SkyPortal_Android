@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>光遇传送点解析</title>
 
-    <!-- 确保你已经把 jszip.min.js 放在同级目录 -->
     <script src="./jszip.min.js"></script>
 
     <style>
@@ -168,340 +167,42 @@
         </div>
     </div>
 
+    <!-- 更新弹窗 -->
+    <div class="modal-overlay" id="updateModal" style="align-items: center;">
+        <div class="fallback-modal" style="margin-top: 0; transform: translateY(-10vh);">
+            <h3 style="color: var(--accent-green); margin-bottom: 10px;">发现新版本 🎉</h3>
+            <p id="updateLogText" style="color: #ccc; white-space: pre-wrap; font-family: inherit; font-size: 14px; text-align: left; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;"></p>
+            <button class="modal-btn" onclick="downloadUpdate()" style="background: var(--accent-green); color: #000; margin-top: 20px;">立即更新</button>
+            <button class="modal-btn" onclick="closeUpdateModal()" style="color: #888; background: transparent;">暂不更新</button>
+        </div>
+    </div>
+
     <input type="file" id="fileApkInput" accept=".apk" style="display: none;">
 
     <script>
-        // 换回你的最新 GitHub 词典链接
+        // 在线词典 & 更新配置
         const GITHUB_ONLINE_DICT_URL = "https://raw.githubusercontent.com/OneStarZero/SkyPortalPreview-online_dict/refs/heads/main/online_dict.json"; 
-        
-        // 本地兜底词库
+        const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/OneStarZero/SkyPortalPreview-online_dict/refs/heads/main/update.json";
+        const CURRENT_VERSION_CODE = 10; // 当前版本号，与 build.gradle 一致
+
+        // 极致补全的本地兜底词典
         const LOCAL_TRANSLATIONS = {
-                "_========== 【遇境与核心社交区】 ==========": "==================================",
-    "CandleSpace": "遇境",
-    "CandleSpaceEnd": "遇境·终点",
-    "Nintendo_CandleSpace": "任天堂遇境",
-    "HomeSpace": "遇境",
-    "Home": "遇境",
-    "SocialSpace": "社交大厅",
-    "HomeHub": "遇境中心",
-    "Season24Void1": "第24赛季虚空",
-    "Skyway": "云道",
-    "TGCOffice": "TGC办公室",
-    "UndergroundOffice": "地下办公室",
-    "VoidSharedSpace": "虚空共享空间",
-    "WorldEmpty": "空世界",
-    "Credits": "制作人员名单",
-
-    "_========== 【晨岛】 ==========": "==================================",
-    "Dawn": "晨岛",
-    "IsleOfDawn": "晨岛",
-    "Isle": "晨岛",
-    "DawnCave": "晨岛·洞穴",
-    "DayHubCave": "白日中心洞穴",
-    "DayEnd": "晨岛·终点",
-    "Dawn_TrialsAir": "晨岛·风之试炼",
-    "Dawn_TrialsEarth": "晨岛·地之试炼",
-    "Dawn_TrialsFire": "晨岛·火之试炼",
-    "Dawn_TrialsWater": "晨岛·水之试炼",
-    "TrialOfWater": "晨岛·水之试炼",
-    "TrialOfEarth": "晨岛·地之试炼",
-    "TrialOfAir": "晨岛·风之试炼",
-    "TrialOfFire": "晨岛·火之试炼",
-    "ProphecyCave": "晨岛·预言山谷",
-    "Isle_ButterflyCave": "晨岛·蝴蝶洞穴",
-    "Isle_WhaleRock": "晨岛·鲸鱼岩",
-    "Isle_CloudHole": "晨岛·云洞",
-    "Dawn_CloudTunnel": "晨岛·云洞隧道",
-
-    "_========== 【云野】 ==========": "==================================",
-    "Prairie": "云野",
-    "DaylightPrairie": "云野",
-    "Prairie_ButterflyFields": "云野·蝴蝶平原",
-    "Prairie_Cave": "云野·洞穴",
-    "Prairie_Island": "云野·圣岛",
-    "SanctuaryIslands": "云野·圣岛",
-    "Prairie_NestAndKeeper": "云野·鸟巢与圣岛",
-    "Prairie_Village": "云野·三塔图",
-    "Prairie_WildLifePark": "云野·野生动物园",
-    "Prairie_Temple": "云野·神庙",
-    "Prairie_EightPlayer": "云野·八人门",
-    "Prairie_BirdNest": "云野·鸟巢",
-    "Prairie_CloudGarden": "云野·云层花园",
-    "Prairie_ThreeTower": "云野·三塔图",
-    "Prairie_MushroomCircle": "云野·蘑菇圈",
-    "Prairie_GlowingCave": "云野·幽光洞穴",
-    "Prairie_CloudHarbor": "云野·云中港湾",
-    "Prairie_Cowboy": "云野·废弃竞技场",
-
-    "_========== 【雨林】 ==========": "==================================",
-    "Rain": "雨林",
-    "RainForest": "雨林",
-    "HiddenForest": "雨林·隐藏图",
-    "RainEnd": "雨林·终点",
-    "RainMid": "雨林·中段",
-    "RainShelter": "雨林·树屋",
-    "RainForest_Shelter": "雨林·树屋",
-    "Rain_BaseCamp": "雨林·营地",
-    "Rain_BlueBirdTheater": "雨林·青鸟剧场",
-    "Rain_Cave": "雨林·洞穴",
-    "RainForest_Temple": "雨林·神庙",
-    "RainForest_SecretGarden": "雨林·秘密花园",
-    "RainForest_Jellyfish": "雨林·水母图",
-    "RainForest_Boneyard": "雨林·埋骨之地",
-    "RainForest_Brook": "雨林·小溪",
-    "RainForest_Sunny": "雨林·密林遗迹",
-    "RainForest_CrabCave": "雨林·螃蟹洞",
-    "RainForest_MiniMap": "雨林·小地图",
-    "Rain_UndergroundCaverns": "雨林·地下洞穴",
-    "Rain_TranquilCourtyard": "雨林·静谧庭院",
-    "Rain_GlowingForest": "雨林·荧光森林",
-
-    "_========== 【霞谷】 ==========": "==================================",
-    "Sunset": "霞谷",
-    "Valley": "霞谷",
-    "ValleyOfTriumph": "霞谷",
-    "SunsetVillage": "霞谷·村落",
-    "VillageOfDreams": "霞谷·圆梦村",
-    "HermitValley": "霞谷·隐士山谷",
-    "SunsetEnd": "霞谷·终点",
-    "SunsetEnd2": "霞谷·终点深处",
-    "SunsetRace": "霞谷·赛道",
-    "SunsetVillage_MusicShop": "霞谷·音乐商店",
-    "Sunset_Citadel": "霞谷·霞光城",
-    "Sunset_FlyRace": "霞谷·飞行赛道",
-    "Sunset_Theater": "霞谷·圆梦村剧场",
-    "Sunset_YetiPark": "霞谷·隐士山谷",
-    "SunsetColosseum": "霞谷·竞技场",
-    "Sunset_DreamVillage": "霞谷·圆梦村",
-    "Sunset_IceRink": "霞谷·溜冰场",
-    "Sunset_HarmonyHall": "霞谷·音乐堂",
-    "Sunset_SlidingRace": "霞谷·滑行赛道",
-    "Sunset_Maze": "霞谷·迷宫",
-    "Sunset_ThousandBirds": "霞谷·千鸟城",
-    "Sunset_JadePond": "霞谷·瑶池",
-
-    "_========== 【暮土】 ==========": "==================================",
-    "Dusk": "暮土",
-    "Wasteland": "暮土",
-    "GoldenWasteland": "暮土",
-    "DuskStart": "暮土·起点",
-    "DuskMid": "暮土·中段",
-    "DuskEnd": "暮土·终点",
-    "DuskEnd_Past": "暮土·终点(废弃)",
-    "DuskMid_Past": "暮土·中段(废弃)",
-    "DuskMid_PastMarket": "暮土·中段废弃集市",
-    "Dusk_MidMarket": "暮土·中段集市",
-    "DuskGraveyard": "暮土·四龙图",
-    "Dusk_FirstKrill": "暮土·一龙图",
-    "DuskOasis": "暮土·绿洲",
-    "Dusk_CrabField": "暮土·螃蟹田",
-    "Dusk_HiddenTemple": "暮土·隐藏神庙",
-    "Dusk_PearlIsland": "暮土·珍珠岛",
-    "Dusk_PearlSea": "暮土·珍珠海",
-    "Dusk_Triangle": "暮土·三角地带",
-    "Dusk_TriangleEnd": "暮土·三角终点",
-    "Dusk_Battlefield": "暮土·古战场",
-    "Dusk_Shipwreck": "暮土·沉船",
-    "Dusk_ForgottenArk": "暮土·遗忘方舟",
-    "Dusk_TreasureReef": "暮土·秘宝环礁",
-    "Dusk_BlackWaterBay": "暮土·黑水港湾",
-    "Dusk_Ruins": "暮土·废墟",
-
-    "_========== 【禁阁】 ==========": "==================================",
-    "Night": "禁阁",
-    "Vault": "禁阁",
-    "VaultOfKnowledge": "禁阁",
-    "Library": "禁阁",
-    "Night2": "禁阁(二层)",
-    "NightArchive": "禁阁·档案馆",
-    "NightDesert": "禁阁·星漠",
-    "NightDesert_Beach": "禁阁·星漠海滩",
-    "NightDesert_Planets": "禁阁·星漠行星",
-    "NightEnd": "禁阁·终点",
-    "Night_InfiniteDesert": "禁阁·无尽沙漠",
-    "Night_IPHallway": "禁阁·走廊",
-    "Night_JarCave": "禁阁·罐子洞穴",
-    "Night_Jumble": "禁阁·杂物间",
-    "Night_PaintedWorld": "禁阁·彩绘世界",
-    "Night_Shelter": "禁阁·庇护所",
-    "Night_StoryBook": "禁阁·故事书",
-    "Night_ValleyForest": "禁阁·山谷森林",
-    "Night_ValleyHouse": "禁阁·山谷房屋",
-    "Night_ValleyHouseSky": "禁阁·山谷天空",
-    "Night_Workshop": "禁阁·工作室",
-    "Night_Oasis": "禁阁·绿洲",
-    "Night_CrescentOasis": "禁阁·新月绿洲",
-    "Night_Library": "禁阁·图书馆",
-    "Night_Basement": "禁阁·地下室",
-    "Night_Temple": "禁阁·神庙",
-    "Night_Refuge": "禁阁·庇护所",
-    "Night_FirstFloor": "禁阁·一楼",
-    "Night_SecondFloor": "禁阁·二楼",
-    "Night_ThirdFloor": "禁阁·三楼",
-    "Night_FourthFloor": "禁阁·四楼",
-    "Night_FifthFloor": "禁阁·五楼",
-    "Night_SixthFloor": "禁阁·顶楼",
-    "Night_Summit": "禁阁·顶峰",
-
-    "_========== 【云巢 / 主街】 ==========": "==================================",
-    "MainStreet": "云巢",
-    "AviaryVillage": "云巢",
-    "MainStreet_Apartment": "云巢·公寓",
-    "MainStreet_Cafe": "云巢·咖啡厅",
-    "MainStreet_Cafe_Wonderland": "云巢·仙境咖啡厅",
-    "MainStreet_ConcertHall": "云巢·音乐堂",
-    "MainStreet_FunArmada": "云巢·游乐场",
-    "MainStreet_ShopOutfits": "云巢·服装店",
-    "MainStreet_ShopProps": "云巢·道具店",
-    "MainStreet_ShopSpells": "云巢·魔法商店",
-    "MainStreet_Soundbath": "云巢·声音浴",
-    "MainStreet_StorySpace": "云巢·故事空间",
-    "MainStreetFlyingIntro": "云巢·飞行引导",
-    "Aviary_ShopProps": "云巢·道具店",
-    "Aviary_Cafe": "云巢·咖啡厅",
-    "Aviary_Workshop": "云巢·工作室",
-    "Aviary_ConcertHall": "云巢·音乐堂",
-    "Aviary_Apartment": "云巢·公寓",
-    "Aviary_Courtyard": "云巢·庭院",
-    "Aviary_Plaza": "云巢·广场",
-    "Aviary_StorySpace": "云巢·故事空间",
-    "Aviary_ShopOutfits": "云巢·服装店",
-    "Aviary_ShopSpells": "云巢·魔法商店",
-
-    "_========== 【云巢竞速小游戏】 ==========": "==================================",
-    "Night_GO_City": "云巢·竞速城市",
-    "Night_GO_Farm": "云巢·竞速农场",
-    "Night_GO_Field": "云巢·竞速田野",
-    "Night_GO_Gallery": "云巢·竞速画廊",
-    "Night_GO_Island": "云巢·竞速岛屿",
-    "Night_GO_Town": "云巢·竞速小镇",
-    "Night_GO_Tree": "云巢·竞速树木",
-    "Nest_Night_GO_Town": "云巢·竞速家园",
-
-    "_========== 【伊甸 / 暴风眼 / 重生之路】 ==========": "==================================",
-    "Eden": "伊甸",
-    "EyeOfEden": "暴风眼",
-    "Storm": "暴风眼",
-    "StormStart": "暴风眼·起点",
-    "StormEnd": "暴风眼·终点",
-    "StormEvent_VoidSpace": "暴风眼·虚空空间",
-    "Eden_Hallway": "伊甸·走廊",
-    "Eden_PointOfNoReturn": "伊甸·不归点",
-    "Eden_Ascent": "伊甸·重生之路",
-    "Eden_Orbit": "伊甸·光",
-    "Eden_Eye": "伊甸之眼",
-    "Eden_Storm": "暴风眼",
-    "OrbitEnd": "伊甸之眼(终点)",
-    "OrbitMid": "重生之路·中段",
-
-    "_========== 【全季节地图】 ==========": "==================================",
-    "SeasonOfGratitude_Map": "感恩季·地图",
-    "SeasonOfLightseekers_Map": "追光季·地图",
-    "SeasonOfBelonging_Map": "归属季·地图",
-    "SeasonOfRhythm_Map": "音韵季·地图",
-    "SeasonOfEnchantment_Map": "魔法季·遗忘方舟",
-    "SeasonOfSanctuary_Map": "圣岛季·圣域群岛",
-    "SeasonOfProphecy_Map": "预言季·预言山谷",
-    "SeasonOfDreams_Map": "梦想季·圆梦村",
-    "SeasonOfAssembly_Map": "集结季·大树屋",
-    "SeasonOfTheLittlePrince_Map": "小王子季·星光沙漠",
-    "SeasonOfFlight_Map": "风行季·风行网道",
-    "SeasonOfAbyss_Map": "潜海季·藏宝岛礁",
-    "SeasonOfPerformance_Map": "表演季·圆梦村剧场",
-    "SeasonOfShattering_Map": "破晓季·远古回忆",
-    "SeasonOfAURORA_Map": "欧若拉季·极光音乐会",
-    "SeasonOfRemembrance_Map": "追忆季·缅怀之地",
-    "SeasonOfPassage_Map": "夜行季·夜间探索区",
-    "SeasonOfMoments_Map": "拾光季·云野峻岭",
-    "SeasonOfRevival_Map": "归巢季·归巢之地",
-    "SeasonOfTheNineColoredDeer_Map": "九色鹿季·九色鹿秘境",
-    "SeasonOfNesting_Map": "筑巢季·筑巢小屋",
-    "SeasonOfDuets_Map": "双重奏季·双人舞台",
-    "SeasonOfMoomin_Map": "姆明季·姆明谷",
-    "SeasonOfRadiance_Map": "彩染季·彩染工坊",
-    "SeasonOfMigration_Map": "迁徙季·迁徙之路",
-    "SeasonOfCarnival_Map": "狂欢季·狂欢船队",
-    "SeasonOfTheBlueBird_Map": "青鸟季·青鸟剧场",
-    "SeasonOfTheTwoEmbers_Map": "双星季·双星之地",
-    "SeasonOfLightmending_Map": "织光季·织光之所",
-    "SeasonOfPearl_Map": "珍珠季·珍珠村",
-
-    "_========== 【全季节名称】 ==========": "==================================",
-    "SeasonOfGratitude": "感恩季",
-    "SeasonOfLightseekers": "追光季",
-    "SeasonOfBelonging": "归属季",
-    "SeasonOfRhythm": "音韵季",
-    "SeasonOfEnchantment": "魔法季",
-    "SeasonOfSanctuary": "圣岛季",
-    "SeasonOfProphecy": "预言季",
-    "SeasonOfDreams": "梦想季",
-    "SeasonOfAssembly": "集结季",
-    "SeasonOfTheLittlePrince": "小王子季",
-    "SeasonOfFlight": "风行季",
-    "SeasonOfAbyss": "潜海季",
-    "SeasonOfPerformance": "表演季",
-    "SeasonOfShattering": "破晓季",
-    "SeasonOfAURORA": "欧若拉季",
-    "SeasonOfRemembrance": "追忆季",
-    "SeasonOfPassage": "夜行季",
-    "SeasonOfMoments": "拾光季",
-    "SeasonOfRevival": "归巢季",
-    "SeasonOfTheNineColoredDeer": "九色鹿季",
-    "SeasonOfNesting": "筑巢季",
-    "SeasonOfDuets": "双重奏季",
-    "SeasonOfMoomin": "姆明季",
-    "SeasonOfRadiance": "彩染季",
-    "SeasonOfMigration": "迁徙季",
-    "SeasonOfCarnival": "狂欢季",
-    "SeasonOfTheBlueBird": "青鸟季",
-    "SeasonOfTheTwoEmbers": "双星季",
-    "SeasonOfLightmending": "织光季",
-    "SeasonOfPearl": "珍珠季",
-
-    "_========== 【节日活动地图】 ==========": "==================================",
-    "Event_Cinema": "活动·剧场",
-    "Event_DaysOfMischief": "活动·恶作剧之日",
-    "Event_DaysOfMischief_Escape": "活动·恶作剧逃脱",
-    "Event_DaysOfMoonlight_HugeMoon": "活动·月光日(巨月)",
-    "Event_HidenSeek_SnowVillage": "活动·捉迷藏雪村",
-    "Event_Personality": "活动·性格测试",
-    "Event_WerewolfGame": "活动·狼人杀",
-    "Event_Arr_ExhaleInhale": "欧若拉·呼吸",
-    "Event_Arr_EyesOfAChild": "欧若拉·孩童之眼",
-    "Event_Arr_Runaway": "欧若拉·逃跑",
-    "Event_Arr_SoftInside": "欧若拉·柔软内心",
-    "Event_Arr_TheSeed": "欧若拉·种子",
-    "Event_Arr_Warrior": "欧若拉·战士",
-    "Event_DaysOfLove": "活动·爱之日",
-    "Event_DaysOfBloom": "活动·花之日",
-    "Event_DaysOfNature": "活动·自然日",
-    "Event_DaysOfColor": "活动·色彩日",
-    "Event_DaysOfFortune": "活动·幸运日",
-    "Event_DaysOfMusic": "活动·音乐节",
-    "Event_DaysOfRainbow": "活动·彩虹日",
-    "Event_DaysOfSummer": "活动·夏日节",
-    "Event_DaysOfSunlight": "活动·阳光日",
-    "Event_DaysOfTreasure": "活动·宝藏日",
-    "Event_DaysOfStyle": "活动·时尚日",
-    "Event_DaysOfFeast": "活动·宴会日",
-    "Event_DaysOfGiving": "活动·感恩日",
-    "Event_SkyAnniversary": "活动·周年庆",
-    "Event_Tournament": "活动·锦标赛",
-    "Event_Carnival_Ship": "活动·狂欢船队",
-    "Event_Carnival_Parade": "活动·狂欢游行",
-    "Event_Carnival_Market": "活动·狂欢集市",
-    "Event_Anniversary_Office": "活动·周年庆办公室",
-    "Event_Anniversary_Stage": "活动·周年庆舞台",
-    "Event_Christmas": "活动·圣诞节",
-    "Event_Halloween": "活动·万圣节",
-    "Event_LunarNewYear": "活动·春节",
-
-    "_========== 【测试节点与开发者废案】 ==========": "==================================",
-    "AR_Bedroom": "AR·卧室",
-    "AR_TestLevel": "AR·测试关卡",
-    "AR_WheatField": "AR·麦田",
-    "ToolComment": "开发者测试节点",
-    "TestLevel": "测试关卡"
+            "AR_Bedroom": "AR·卧室", "AR_TestLevel": "AR·测试关卡", "AR_WheatField": "AR·麦田", "Credits": "制作人员名单",
+            "DayEnd": "晨岛·终点", "DayHubCave": "白日中心洞穴", "CandleSpaceEnd": "遇境·终点", "Dusk_CrabField": "暮土·螃蟹田", 
+            "Dusk_HiddenTemple": "暮土·隐藏神庙", "Dusk_PearlIsland": "暮土·珍珠岛", "Dusk_PearlSea": "暮土·珍珠海", 
+            "Dusk_Triangle": "暮土·三角地带", "Dusk_TriangleEnd": "暮土·三角终点", "Event_Arr_EyesOfAChild": "欧若拉·孩童之眼", 
+            "Event_Arr_ExhaleInhale": "欧若拉·呼吸", "Event_Arr_Runaway": "欧若拉·逃跑", "Event_Arr_SoftInside": "欧若拉·柔软内心", 
+            "Event_Arr_TheSeed": "欧若拉·种子", "Event_Arr_Warrior": "欧若拉·战士", "Event_DaysOfMoonlight_HugeMoon": "活动·月光日(巨月)", 
+            "Event_HidenSeek_SnowVillage": "活动·捉迷藏雪村", "NightDesert_Planets": "禁阁·星漠行星", "NightDesert_Beach": "禁阁·星漠海滩", 
+            "Night_InfiniteDesert": "禁阁·无尽沙漠", "Night_IPHallway": "禁阁·走廊", "Night_JarCave": "禁阁·罐子洞穴", 
+            "Night_ValleyForest": "禁阁·山谷森林", "Night_ValleyHouse": "禁阁·山谷房屋", "Night_ValleyHouseSky": "禁阁·山谷天空", 
+            "Night_Workshop": "禁阁·工作室", "Prairie_NestAndKeeper": "云野·鸟巢与圣岛", "Rain_BlueBirdTheater": "雨林·青鸟剧场", 
+            "RainForest_Shelter": "雨林·树屋", "SunsetColosseum": "霞谷·竞技场", "SunsetVillage_MusicShop": "霞谷·音乐商店", 
+            "Sunset_FlyRace": "霞谷·飞行赛道", "Sunset_YetiPark": "霞谷·隐士山谷", "Night2": "禁阁(二层)",
+            
+            "CandleSpace": "遇境", "Dawn": "晨岛", "MainStreet": "云巢", "Prairie_ButterflyFields": "云野·蝴蝶平原", 
+            "Prairie_Island": "云野·圣岛", "Rain": "雨林", "Sunset": "霞谷", "Dusk": "暮土", "Night": "禁阁", 
+            "Storm": "暴风眼", "OrbitEnd": "伊甸之眼"
         };
 
         let ONLINE_TRANSLATIONS = {}; 
@@ -514,9 +215,8 @@
         }
         updateSortedKeys();
 
-        // 核心修复：纯前端处理在线词典下载和本地缓存保存
+        // 词典处理逻辑
         function fetchOnlineDict() {
-            // 1. 优先读取本地缓存
             if (window.AndroidNative && window.AndroidNative.getLocalDict) {
                 let localStr = window.AndroidNative.getLocalDict();
                 if (localStr && localStr.trim() !== "") {
@@ -524,54 +224,66 @@
                         ONLINE_TRANSLATIONS = JSON.parse(localStr);
                         IS_ONLINE_MODE = true;
                         updateSortedKeys();
-                        console.log("✅ 成功加载本地缓存词典");
-                    } catch (e) {
-                        console.log("本地缓存解析失败，等待在线更新");
-                    }
+                    } catch (e) {}
                 }
             }
 
-            // 2. 没网直接用现有的
             if (!navigator.onLine) return;
-
-            // 3. 有网去检查最新版
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 8000);
 
             fetch(GITHUB_ONLINE_DICT_URL + "?t=" + Date.now(), { signal: controller.signal })
-                .then(res => { 
-                    if(!res.ok) throw new Error("HTTP " + res.status); 
-                    return res.text(); 
-                })
+                .then(res => { if(!res.ok) throw new Error("HTTP " + res.status); return res.text(); })
                 .then(text => {
                     const data = JSON.parse(text);
-                    
-                    // 如果内容发生变化，或者之前没加载过
                     if (!IS_ONLINE_MODE || JSON.stringify(data) !== JSON.stringify(ONLINE_TRANSLATIONS)) {
                         ONLINE_TRANSLATIONS = data;
                         IS_ONLINE_MODE = true;
                         updateSortedKeys();
-                        console.log("✅ 在线词典已更新至最新版本");
-                        
-                        // 自动保存到本地（通过原生接口）
                         if (window.AndroidNative && window.AndroidNative.saveDictLocally) {
                             window.AndroidNative.saveDictLocally(text);
                         }
-                    } else {
-                        console.log("✅ 在线词典已是最新版本");
                     }
                 })
-                .catch(err => {
-                    console.log("❌ 在线词典更新失败（继续使用本地或内置词典）：", err.message);
-                })
-                .finally(() => {
-                    clearTimeout(timeoutId);
-                });
+                .catch(err => console.log("在线词典更新失败", err))
+                .finally(() => clearTimeout(timeoutId));
         }
-
         fetchOnlineDict();
         window.addEventListener('online', fetchOnlineDict);
 
+        // 更新检查逻辑
+        let pendingDownloadUrl = "";
+        function checkForUpdate() {
+            if (!navigator.onLine) return;
+            fetch(UPDATE_CHECK_URL + "?t=" + Date.now())
+                .then(res => res.json())
+                .then(data => {
+                    if (data.versionCode > CURRENT_VERSION_CODE) {
+                        pendingDownloadUrl = data.downloadUrl;
+                        document.getElementById("updateLogText").innerText = `版本：${data.versionName}\n\n更新内容：\n${data.updateLog}`;
+                        document.getElementById("updateModal").classList.add("show");
+                    }
+                })
+                .catch(err => console.log("检查更新失败：", err));
+        }
+        setTimeout(checkForUpdate, 1500);
+
+        function downloadUpdate() {
+            playSound('tab');
+            if (window.AndroidNative && window.AndroidNative.openBrowser) {
+                window.AndroidNative.openBrowser(pendingDownloadUrl);
+            } else {
+                window.open(pendingDownloadUrl, "_blank");
+            }
+            closeUpdateModal();
+        }
+
+        function closeUpdateModal() {
+            playSound('tap');
+            document.getElementById("updateModal").classList.remove("show");
+        }
+
+        // 翻译引擎
         function translateLevel(rawName) {
             if (!rawName) return "未知";
             let activeDict = IS_ONLINE_MODE ? Object.assign({}, LOCAL_TRANSLATIONS, ONLINE_TRANSLATIONS) : LOCAL_TRANSLATIONS;
@@ -584,6 +296,7 @@
             return rawName;
         }
 
+        // 音频
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         let audioCtx; let lastPlayTime = 0;
         function initAudio() { if (!audioCtx) audioCtx = new AudioContext(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
@@ -599,7 +312,7 @@
             }
         }
 
-        // 1:1 移植 Python 引擎
+        // 1:1 JS 移植引擎
         class SkyBinaryParser {
             constructor(buffer) {
                 this.buffer = buffer;
@@ -607,25 +320,19 @@
                 this.offset = 0;
                 this.textDecoder = new TextDecoder('utf-8');
             }
-
             readUint8() { const v = this.view.getUint8(this.offset); this.offset += 1; return v; }
             readUint16() { const v = this.view.getUint16(this.offset, true); this.offset += 2; return v; }
             readUint32() { const v = this.view.getUint32(this.offset, true); this.offset += 4; return v; }
             readFloat32() { const v = this.view.getFloat32(this.offset, true); this.offset += 4; return v; }
             readFloat64() { const v = this.view.getFloat64(this.offset, true); this.offset += 8; return v; }
             seek(bytes) { this.offset += bytes; }
-
             readString() {
                 let start = this.offset;
                 while (this.offset < this.buffer.byteLength && this.view.getUint8(this.offset) !== 0) this.offset++;
                 const str = this.textDecoder.decode(new Uint8Array(this.buffer, start, this.offset - start));
                 this.offset++; return str;
             }
-
-            should_read_uint32_as_integer(name) {
-                return name === 'bstGuid' || name.includes('BstGuid');
-            }
-
+            should_read_uint32_as_integer(name) { return name === 'bstGuid' || name.includes('BstGuid'); }
             parse() {
                 this.offset = 4; 
                 const header = {
@@ -634,92 +341,56 @@
                     property_offset: this.readUint32(), property_name_offset: this.readUint32(), bst_node_offset: this.readUint32(),
                     file_size: this.readUint32()
                 };
-
                 let classes = [];
                 this.offset = header.class_offset;
                 for (let i = 0; i < header.class_length; i++) {
-                    classes.push({
-                        class_property_name_offset: this.readUint32(),
-                        class_property_starting_index: this.readUint32(),
-                        class_property_count: this.readUint32(),
-                        class_name: ''
-                    });
+                    classes.push({ class_property_name_offset: this.readUint32(), class_property_starting_index: this.readUint32(), class_property_count: this.readUint32(), class_name: '' });
                 }
-
                 let allProperties = [];
                 for (let i = 0; i < classes.length; i++) {
-                    let cls = classes[i];
-                    let props = [];
+                    let cls = classes[i]; let props = [];
                     this.offset = header.property_offset + (cls.class_property_starting_index * 16);
                     for (let j = 0; j < cls.class_property_count; j++) {
-                        props.push({
-                            property_type: this.readUint32(),
-                            property_name_offset: this.readUint32(),
-                            object_byte_size: this.readUint32(),
-                            array_index: this.readUint32(),
-                            property_name: ''
-                        });
+                        props.push({ property_type: this.readUint32(), property_name_offset: this.readUint32(), object_byte_size: this.readUint32(), array_index: this.readUint32(), property_name: '' });
                     }
-                    for (let p of props) {
-                        this.offset = header.property_name_offset + p.property_name_offset;
-                        p.property_name = this.readString();
-                    }
+                    for (let p of props) { this.offset = header.property_name_offset + p.property_name_offset; p.property_name = this.readString(); }
                     allProperties.push(props);
                     this.offset = header.property_name_offset + cls.class_property_name_offset;
                     cls.class_name = this.readString();
                 }
-
                 this.offset = header.bst_node_offset;
                 let jsonData = { version: header.version, MemorySize: header.object_ptr_count.toString(), classes: {}, BSTNodes: {} };
-
                 for (let i = 0; i < classes.length; i++) {
                     let cls = classes[i];
-                    if (allProperties[i].length === 0) {
-                        jsonData.classes[cls.class_name] = null;
-                    } else {
+                    if (allProperties[i].length === 0) jsonData.classes[cls.class_name] = null;
+                    else {
                         jsonData.classes[cls.class_name] = {};
-                        for (let p of allProperties[i]) {
-                            jsonData.classes[cls.class_name][p.property_name] = {
-                                propertyType: p.property_type,
-                                objectByteSize: p.object_byte_size,
-                                arrayIndex: p.array_index
-                            };
-                        }
+                        for (let p of allProperties[i]) jsonData.classes[cls.class_name][p.property_name] = { propertyType: p.property_type, objectByteSize: p.object_byte_size, arrayIndex: p.array_index };
                     }
                 }
-
                 for (let i = 0; i < header.bst_node_count; i++) {
-                    let index = this.readUint32();
-                    let bstName = this.readString();
+                    let index = this.readUint32(); let bstName = this.readString();
                     jsonData.BSTNodes[bstName] = {};
                     this.readClass(jsonData.BSTNodes[bstName], index, allProperties, classes, true);
                 }
-
                 const bstNodeNames = Object.keys(jsonData.BSTNodes);
                 for (let nodeName in jsonData.BSTNodes) {
                     let bstData = jsonData.BSTNodes[nodeName];
                     for (let className in bstData) {
-                        let classMeta = jsonData.classes[className];
-                        let classData = bstData[className];
-                        if (classMeta && classData) {
-                            this.resolveClumpRefs(classData, jsonData.classes, classMeta, classes, bstNodeNames);
-                        }
+                        let classMeta = jsonData.classes[className]; let classData = bstData[className];
+                        if (classMeta && classData) this.resolveClumpRefs(classData, jsonData.classes, classMeta, classes, bstNodeNames);
                     }
                 }
-
                 return jsonData;
             }
-
             readClass(targetJson, index, allProperties, classes, wrapClassName = true) {
                 if (index >= allProperties.length) return;
-                
                 let classJson = targetJson;
                 if (wrapClassName) {
                     let className = classes[index].class_name;
                     if (!classJson[className]) classJson[className] = {};
                     classJson = classJson[className];
                 }
-
                 for (let prop of allProperties[index]) {
                     if (prop.property_type === 0) {
                         if (prop.object_byte_size === 1) {
@@ -787,13 +458,11 @@
                     }
                 }
             }
-
             resolveClumpRefs(classData, allClassesMeta, classMeta, classes, bstNodeNames) {
                 for (let propName in classMeta) {
                     let meta = classMeta[propName];
                     let propType = meta.propertyType;
                     let arrIdx = meta.arrayIndex;
-
                     if (propType === 2) {
                         let clumpKey = `[CLUMP]${propName}`;
                         if (classData[clumpKey] && typeof classData[clumpKey] === 'string') {
@@ -818,7 +487,6 @@
                     }
                 }
             }
-
             resolveClumpString(value, bstNodeNames) {
                 if (value === "-nan" || value === "nan") return "-nan";
                 let idx = parseInt(value, 10);
@@ -870,15 +538,12 @@
             reader.onload = (event) => { 
                 try { 
                     const json = JSON.parse(event.target.result);
-                    
                     currentApkPath = null; 
                     switchMapBtn.style.display = "none"; 
                     actionBar.style.display = "flex"; 
-
                     currentJsonData = json;
                     currentLevelName = file.name.replace('.json','');
                     processData(json);
-
                     playSound('success'); 
                     importBtn.innerText = "📂 导入光遇 JSON 文件"; 
                 } 
@@ -904,7 +569,6 @@
 
         window.showNativeApps = function(apps) {
             if (!apps || apps.length === 0) return alert("未获取到应用");
-            
             modalTitle.innerText = "选择应用";
             appListContainer.innerHTML = "";
             const fragment = document.createDocumentFragment();
@@ -913,7 +577,6 @@
                 let item = document.createElement('div');
                 item.className = 'app-item';
                 let iconId = "icon_" + index;
-                
                 item.innerHTML = `
                     <img class="app-icon" id="${iconId}" src="" alt="">
                     <div class="app-info">
@@ -921,7 +584,6 @@
                         <div class="app-pkg">${app.packageName}</div>
                     </div>
                 `;
-                
                 item.addEventListener('click', () => {
                     playSound('tap'); closeNativeAppModal();
                     currentApkPath = app.packageName;
@@ -930,14 +592,9 @@
                     nativeAppModal.classList.add('show');
                     window.AndroidNative.getApkLevels(currentApkPath);
                 });
-                
                 fragment.appendChild(item);
-
-                setTimeout(() => {
-                    window.AndroidNative.getAppIcon(app.packageName, iconId);
-                }, index * 20);
+                setTimeout(() => { window.AndroidNative.getAppIcon(app.packageName, iconId); }, index * 20);
             });
-
             appListContainer.appendChild(fragment);
         };
 
@@ -951,18 +608,14 @@
                 appListContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#ff4466;">该应用内未找到任何地图文件 (Objects.level.bin)</div>`;
                 return;
             }
-            
             modalTitle.innerText = "选择要解析的地图";
             appListContainer.innerHTML = "";
-            
             levels.sort((a, b) => a.levelName.localeCompare(b.levelName));
             const fragment = document.createDocumentFragment();
-            
             levels.forEach(level => {
                 let item = document.createElement('div');
                 item.className = 'app-item';
                 item.innerHTML = `<div class="app-name" style="color:#00ffaa;">${translateLevel(level.levelName)}</div>`;
-                
                 item.addEventListener('click', () => {
                     playSound('tap'); closeNativeAppModal();
                     listContainer.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
@@ -970,7 +623,6 @@
                 });
                 fragment.appendChild(item);
             });
-            
             appListContainer.appendChild(fragment);
         };
 
@@ -980,16 +632,12 @@
                 const len = binaryString.length;
                 const bytes = new Uint8Array(len);
                 for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-
                 const parser = new SkyBinaryParser(bytes.buffer);
                 const jsonData = parser.parse();
-                
                 currentJsonData = jsonData;
                 currentLevelName = levelName;
-                
                 switchMapBtn.style.display = "block"; 
                 actionBar.style.display = "flex";
-
                 processData(jsonData);
                 importApkBtn.innerText = "📱 读取已安装应用";
                 playSound('success');
@@ -1018,7 +666,6 @@
             playSound('tap');
             const jsonStr = JSON.stringify(currentJsonData, null, 2);
             const fileName = currentLevelName + "_Objects.level.json";
-            
             if (window.AndroidNative && window.AndroidNative.exportJson) {
                 window.AndroidNative.exportJson(fileName, jsonStr);
             } else {
@@ -1035,15 +682,12 @@
             parsedData.enabled = [];
             parsedData.disabled = [];
             const bstNodes = data.BSTNodes || {};
-
             for (let key in bstNodes) {
                 let node = bstNodes[key];
                 if (!node || !node.LevelLink) continue;
-                
                 let link = node.LevelLink;
                 let tf = link.transform;
                 if (!tf) continue;
-
                 let mx = 0, my = 0, mz = 0;
                 try {
                     if (Array.isArray(tf) && tf.length >= 4) {
@@ -1054,27 +698,22 @@
                     }
                 } catch (e) { continue; }
                 if (mx === 0 && my === 0 && mz === 0) continue;
-
                 let translatedLevel = translateLevel(link.levelName || "未知");
                 let item = { 
                     name: link.linkName || "未知", 
                     level: translatedLevel, 
                     x: mx.toFixed(1), z: my.toFixed(1), y: mz.toFixed(1) 
                 };
-
                 if (link.enabled === true || link.enabled === 1 || link.enabled === "true") {
                     parsedData.enabled.push(item);
                 } else {
                     parsedData.disabled.push(item);
                 }
             }
-
             searchBar.style.display = "block";
             tabs.style.display = "flex";
-            
             tabAvail.innerText = `可用 (${parsedData.enabled.length})`;
             tabDis.innerText = `禁用 (${parsedData.disabled.length})`;
-            
             switchTab('enabled');
         }
 
@@ -1097,12 +736,10 @@
             let sourceData = currentTab === 'enabled' ? parsedData.enabled : parsedData.disabled;
             let keyword = searchInput.value.trim().toLowerCase();
             if (keyword) sourceData = sourceData.filter(item => item.name.toLowerCase().includes(keyword) || item.level.toLowerCase().includes(keyword));
-
             if (sourceData.length === 0) { 
                 listContainer.innerHTML = `<div style="text-align:center; color:#666; margin-top:50px;">没有找到匹配的传送点</div>`; 
                 return; 
             }
-
             sourceData.forEach((item, index) => {
                 let card = document.createElement('div');
                 card.className = `card ${currentTab} card-anim`;
@@ -1114,7 +751,6 @@
                 `;
                 bindCardEvents(card, item); fragment.appendChild(card);
             });
-
             listContainer.innerHTML = ""; listContainer.appendChild(fragment);
         }
 
