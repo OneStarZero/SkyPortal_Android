@@ -147,6 +147,7 @@ public class MainActivity extends Activity {
             }).start();
         }
 
+        // 🔥 核心修复点：优化扫描速度 + 异常抛出
         @JavascriptInterface
         public void getApkLevels(String packageName) {
             new Thread(() -> {
@@ -181,8 +182,17 @@ public class MainActivity extends Activity {
                         }
                         zipFile.close();
                     }
-                    mainHandler.post(() -> webView.evaluateJavascript("javascript:showApkLevels(" + levelsArray.toString() + ")", null));
-                } catch (Exception e) { e.printStackTrace(); }
+                    
+                    // 回调前端
+                    final String jsCode = "javascript:showApkLevels(" + levelsArray.toString() + ")";
+                    mainHandler.post(() -> webView.evaluateJavascript(jsCode, null));
+                    
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    // ❗️ 如果报错（比如没有权限读 /data/app），直接弹窗告诉用户！
+                    final String errMsg = e.getMessage() != null ? e.getMessage() : "未知错误，可能是没有文件读取权限";
+                    mainHandler.post(() -> webView.evaluateJavascript("javascript:alert('扫描 APK 失败: " + errMsg + "');", null));
+                }
             }).start();
         }
 
@@ -227,4 +237,4 @@ public class MainActivity extends Activity {
             return bitmap;
         }
     }
-                    }
+            }
