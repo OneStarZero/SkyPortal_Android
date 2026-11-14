@@ -147,7 +147,7 @@ public class MainActivity extends Activity {
             }).start();
         }
 
-        // 🔥 核心修复点：优化扫描速度 + 异常抛出
+        // 🔥 完全兼容分包及 assets 特殊路径的扫描
         @JavascriptInterface
         public void getApkLevels(String packageName) {
             new Thread(() -> {
@@ -170,9 +170,11 @@ public class MainActivity extends Activity {
                             String name = entry.getName();
                             String lowerName = name.toLowerCase();
                             
-                            if (lowerName.startsWith("data/levels/") && lowerName.endsWith("/objects.level.bin")) {
+                            // 精准特征匹配：兼容 /assets/Data/Levels/... 等各种异常路径
+                            if (lowerName.contains("/levels/") && lowerName.endsWith("/objects.level.bin")) {
                                 String[] parts = name.split("/");
                                 String levelName = parts[parts.length - 2];
+                                
                                 JSONObject levelObj = new JSONObject();
                                 levelObj.put("levelName", levelName);
                                 levelObj.put("entryName", name);
@@ -183,13 +185,11 @@ public class MainActivity extends Activity {
                         zipFile.close();
                     }
                     
-                    // 回调前端
                     final String jsCode = "javascript:showApkLevels(" + levelsArray.toString() + ")";
                     mainHandler.post(() -> webView.evaluateJavascript(jsCode, null));
                     
                 } catch (Exception e) {
                     e.printStackTrace();
-                    // ❗️ 如果报错（比如没有权限读 /data/app），直接弹窗告诉用户！
                     final String errMsg = e.getMessage() != null ? e.getMessage() : "未知错误，可能是没有文件读取权限";
                     mainHandler.post(() -> webView.evaluateJavascript("javascript:alert('扫描 APK 失败: " + errMsg + "');", null));
                 }
