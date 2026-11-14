@@ -231,106 +231,227 @@
             }
         }
 
+        // 🌟 纯正的 Python object_format.py 移植版
         class SkyBinaryParser {
-            constructor(buffer) { this.buffer = buffer; this.view = new DataView(buffer); this.offset = 0; this.textDecoder = new TextDecoder('utf-8'); }
+            constructor(buffer) {
+                this.buffer = buffer;
+                this.view = new DataView(buffer);
+                this.offset = 0;
+                this.textDecoder = new TextDecoder('utf-8');
+            }
+
             readUint8() { const v = this.view.getUint8(this.offset); this.offset += 1; return v; }
             readUint16() { const v = this.view.getUint16(this.offset, true); this.offset += 2; return v; }
             readUint32() { const v = this.view.getUint32(this.offset, true); this.offset += 4; return v; }
             readFloat32() { const v = this.view.getFloat32(this.offset, true); this.offset += 4; return v; }
             readFloat64() { const v = this.view.getFloat64(this.offset, true); this.offset += 8; return v; }
             seek(bytes) { this.offset += bytes; }
+
             readString() {
                 let start = this.offset;
                 while (this.offset < this.buffer.byteLength && this.view.getUint8(this.offset) !== 0) this.offset++;
                 const str = this.textDecoder.decode(new Uint8Array(this.buffer, start, this.offset - start));
                 this.offset++; return str;
             }
+
+            // 严格对照 Python 的 should_read_uint32_as_integer
+            should_read_uint32_as_integer(name) {
+                return name === 'bstGuid' || name.includes('BstGuid');
+            }
+
             parse() {
                 this.offset = 4; 
-                const header = { version: this.readUint32(), class_length: this.readUint32(), property_count: this.readUint32(), bst_node_count: this.readUint32(), object_ptr_count: this.readUint32(), class_offset: this.readUint32(), property_offset: this.readUint32(), property_name_offset: this.readUint32(), bst_node_offset: this.readUint32(), file_size: this.readUint32() };
+                const header = {
+                    version: this.readUint32(), class_length: this.readUint32(), property_count: this.readUint32(),
+                    bst_node_count: this.readUint32(), object_ptr_count: this.readUint32(), class_offset: this.readUint32(),
+                    property_offset: this.readUint32(), property_name_offset: this.readUint32(), bst_node_offset: this.readUint32(),
+                    file_size: this.readUint32()
+                };
+
                 let classes = [];
                 this.offset = header.class_offset;
-                for (let i = 0; i < header.class_length; i++) { classes.push({ class_property_name_offset: this.readUint32(), class_property_starting_index: this.readUint32(), class_property_count: this.readUint32(), class_name: '' }); }
+                for (let i = 0; i < header.class_length; i++) {
+                    classes.push({
+                        class_property_name_offset: this.readUint32(),
+                        class_property_starting_index: this.readUint32(),
+                        class_property_count: this.readUint32(),
+                        class_name: ''
+                    });
+                }
+
                 let allProperties = [];
                 for (let i = 0; i < classes.length; i++) {
-                    let cls = classes[i]; let props = [];
+                    let cls = classes[i];
+                    let props = [];
                     this.offset = header.property_offset + (cls.class_property_starting_index * 16);
-                    for (let j = 0; j < cls.class_property_count; j++) { props.push({ property_type: this.readUint32(), property_name_offset: this.readUint32(), object_byte_size: this.readUint32(), array_index: this.readUint32(), property_name: '' }); }
-                    for (let p of props) { this.offset = header.property_name_offset + p.property_name_offset; p.property_name = this.readString(); }
+                    for (let j = 0; j < cls.class_property_count; j++) {
+                        props.push({
+                            property_type: this.readUint32(),
+                            property_name_offset: this.readUint32(),
+                            object_byte_size: this.readUint32(),
+                            array_index: this.readUint32(),
+                            property_name: ''
+                        });
+                    }
+                    for (let p of props) {
+                        this.offset = header.property_name_offset + p.property_name_offset;
+                        p.property_name = this.readString();
+                    }
                     allProperties.push(props);
                     this.offset = header.property_name_offset + cls.class_property_name_offset;
                     cls.class_name = this.readString();
                 }
+
                 this.offset = header.bst_node_offset;
                 let jsonData = { version: header.version, MemorySize: header.object_ptr_count.toString(), classes: {}, BSTNodes: {} };
+
                 for (let i = 0; i < classes.length; i++) {
                     let cls = classes[i];
-                    if (allProperties[i].length === 0) jsonData.classes[cls.class_name] = null;
-                    else {
+                    if (allProperties[i].length === 0) {
+                        jsonData.classes[cls.class_name] = null;
+                    } else {
                         jsonData.classes[cls.class_name] = {};
-                        for (let p of allProperties[i]) jsonData.classes[cls.class_name][p.property_name] = { propertyType: p.property_type, objectByteSize: p.object_byte_size, arrayIndex: p.array_index };
+                        for (let p of allProperties[i]) {
+                            jsonData.classes[cls.class_name][p.property_name] = {
+                                propertyType: p.property_type,
+                                objectByteSize: p.object_byte_size,
+                                arrayIndex: p.array_index
+                            };
+                        }
                     }
                 }
+
                 for (let i = 0; i < header.bst_node_count; i++) {
-                    let index = this.readUint32(); let bstName = this.readString();
+                    let index = this.readUint32();
+                    let bstName = this.readString();
                     jsonData.BSTNodes[bstName] = {};
-                    this.readClass(jsonData.BSTNodes[bstName], index, allProperties, classes);
+                    this.readClass(jsonData.BSTNodes[bstName], index, allProperties, classes, true);
                 }
+
                 const bstNodeNames = Object.keys(jsonData.BSTNodes);
                 for (let nodeName in jsonData.BSTNodes) {
                     let bstData = jsonData.BSTNodes[nodeName];
                     for (let className in bstData) {
-                        let classMeta = jsonData.classes[className]; let classData = bstData[className];
-                        if (classMeta && classData) this.resolveClumpRefs(classData, jsonData.classes, classMeta, classes, bstNodeNames);
+                        let classMeta = jsonData.classes[className];
+                        let classData = bstData[className];
+                        if (classMeta && classData) {
+                            this.resolveClumpRefs(classData, jsonData.classes, classMeta, classes, bstNodeNames);
+                        }
                     }
                 }
+
                 return jsonData;
             }
-            readClass(targetJson, index, allProperties, classes) {
+
+            readClass(targetJson, index, allProperties, classes, wrapClassName = true) {
                 if (index >= allProperties.length) return;
+                
+                let classJson = targetJson;
+                if (wrapClassName) {
+                    let className = classes[index].class_name;
+                    if (!classJson[className]) classJson[className] = {};
+                    classJson = classJson[className];
+                }
+
                 for (let prop of allProperties[index]) {
                     if (prop.property_type === 0) {
-                        if (prop.object_byte_size === 1) { let val = this.readUint8(); targetJson[prop.property_name] = (val <= 1) ? (val === 1) : `[Unknown]${val.toString(16).toUpperCase()}`; }
-                        else if (prop.object_byte_size === 2) { targetJson[prop.property_name] = this.readUint16().toString(); }
-                        else if (prop.object_byte_size === 4) {
-                            let raw = this.view.getUint32(this.offset, true); let fval = this.readFloat32();
-                            let isIntProp = prop.property_name === 'bstGuid' || prop.property_name.includes('BstGuid');
-                            let s = fval.toFixed(6);
-                            if (isIntProp || s === "0.000000" || s === "-0.000000") targetJson[prop.property_name] = raw.toString();
-                            else targetJson[prop.property_name] = s;
-                        }
-                        else if (prop.object_byte_size === 8) targetJson[prop.property_name] = this.readFloat64().toString();
-                        else if (prop.object_byte_size === 16) targetJson[prop.property_name] = [this.readFloat32(), this.readFloat32(), this.readFloat32(), this.readFloat32()].map(v => v.toString());
-                        else if (prop.object_byte_size === 64) { let t = []; for (let r = 0; r < 4; r++) { let row = []; for (let c = 0; c < 4; c++) row.push(this.readFloat32().toString()); t.push(row); } targetJson[prop.property_name] = t; }
-                        else { targetJson[`[Unknown Property]${prop.property_name}`] = `[Size (Bytes)]${prop.object_byte_size}`; this.seek(prop.object_byte_size); }
-                    } else if (prop.property_type === 1) targetJson[prop.property_name] = this.readString();
-                    else if (prop.property_type === 2) { let raw = this.view.getUint32(this.offset, true); let fval = this.readFloat32(); let s = fval.toFixed(6); targetJson[`[CLUMP]${prop.property_name}`] = (s !== "-nan") ? raw.toString() : s; }
-                    else if (prop.property_type === 3) {
-                        let count = this.readUint32();
-                        if (prop.array_index !== 0xFFFFFFFF) {
-                            let arr = []; for (let i = 0; i < count; i++) { let elem = {}; this.readClass(elem, prop.array_index, allProperties, classes); arr.push(elem); } targetJson[prop.property_name] = arr;
+                        if (prop.object_byte_size === 1) {
+                            let val = this.readUint8();
+                            classJson[prop.property_name] = (val <= 1) ? (val === 1) : `[Unknown]${val.toString(16).toUpperCase().padStart(2, '0')}`;
+                        } else if (prop.object_byte_size === 2) {
+                            classJson[prop.property_name] = this.readUint16().toString();
+                        } else if (prop.object_byte_size === 4) {
+                            let raw = this.view.getUint32(this.offset, true); this.offset += 4;
+                            if (this.should_read_uint32_as_integer(prop.property_name)) {
+                                classJson[prop.property_name] = raw.toString();
+                            } else {
+                                let fval = this.view.getFloat32(this.offset - 4, true);
+                                let s = fval.toFixed(6);
+                                classJson[prop.property_name] = (s === "0.000000" || s === "-0.000000") ? raw.toString() : s;
+                            }
+                        } else if (prop.object_byte_size === 8) {
+                            classJson[prop.property_name] = this.readFloat64().toString();
+                        } else if (prop.object_byte_size === 10) {
+                            let raw = new Uint8Array(this.buffer, this.offset, 10); this.offset += 10;
+                            classJson[prop.property_name] = Array.from(raw).map(b => b.toString(16).padStart(2, '0')).join('');
+                        } else if (prop.object_byte_size === 16) {
+                            classJson[prop.property_name] = [this.readFloat32(), this.readFloat32(), this.readFloat32(), this.readFloat32()].map(v => v.toString());
+                        } else if (prop.object_byte_size === 64) {
+                            let t = [];
+                            for (let r = 0; r < 4; r++) {
+                                let row = [];
+                                for (let c = 0; c < 4; c++) row.push(this.readFloat32().toString());
+                                t.push(row);
+                            }
+                            classJson[prop.property_name] = t;
                         } else {
-                            targetJson[prop.property_name] = { "Num": count.toString(), "[CLUMP]data": [] };
-                            for (let i = 0; i < count; i++) { let raw = this.view.getUint32(this.offset, true); let fval = this.readFloat32(); let s = fval.toFixed(6); targetJson[prop.property_name]["[CLUMP]data"].push((s !== "-nan") ? raw.toString() : s); }
+                            classJson[`[Unknown Property]${prop.property_name}`] = `[Size (Bytes)]${prop.object_byte_size}`;
+                            this.seek(prop.object_byte_size);
                         }
-                    } else { targetJson[`[UNKNOWN]${prop.property_name}`] = `[Size (Bytes)] ${prop.object_byte_size}`; this.seek(prop.object_byte_size > 0 ? prop.object_byte_size : 4); }
+                    } else if (prop.property_type === 1) {
+                        classJson[prop.property_name] = this.readString();
+                    } else if (prop.property_type === 2) {
+                        let raw = this.view.getUint32(this.offset, true); this.offset += 4;
+                        let fval = this.view.getFloat32(this.offset - 4, true);
+                        let s = fval.toFixed(6);
+                        classJson[`[CLUMP]${prop.property_name}`] = (s !== "-nan") ? raw.toString() : s;
+                    } else if (prop.property_type === 3) {
+                        let custom_size = this.readUint32();
+                        if (prop.array_index !== 0xFFFFFFFF) {
+                            let arr = [];
+                            for (let i = 0; i < custom_size; i++) {
+                                let elem = {};
+                                this.readClass(elem, prop.array_index, allProperties, classes, false);
+                                arr.push(elem);
+                            }
+                            classJson[prop.property_name] = arr;
+                        } else {
+                            classJson[prop.property_name] = { "Num": custom_size.toString(), "[CLUMP]data": [] };
+                            for (let i = 0; i < custom_size; i++) {
+                                let raw = this.view.getUint32(this.offset, true); this.offset += 4;
+                                let fval = this.view.getFloat32(this.offset - 4, true);
+                                let s = fval.toFixed(6);
+                                classJson[prop.property_name]["[CLUMP]data"].push((s !== "-nan") ? raw.toString() : s);
+                            }
+                        }
+                    } else {
+                        classJson[`[UNKNOWN]${prop.property_name}`] = `[Size (Bytes)] ${prop.object_byte_size}`;
+                        this.seek(prop.object_byte_size > 0 ? prop.object_byte_size : 4);
+                    }
                 }
             }
+
             resolveClumpRefs(classData, allClassesMeta, classMeta, classes, bstNodeNames) {
                 for (let propName in classMeta) {
                     let meta = classMeta[propName];
-                    if (meta.propertyType === 2) { let clumpKey = `[CLUMP]${propName}`; if (classData[clumpKey] && typeof classData[clumpKey] === 'string') classData[clumpKey] = this.resolveClumpString(classData[clumpKey], bstNodeNames); }
-                    else if (meta.propertyType === 3) {
+                    let propType = meta.propertyType;
+                    let arrIdx = meta.arrayIndex;
+
+                    if (propType === 2) {
+                        let clumpKey = `[CLUMP]${propName}`;
+                        if (classData[clumpKey] && typeof classData[clumpKey] === 'string') {
+                            classData[clumpKey] = this.resolveClumpString(classData[clumpKey], bstNodeNames);
+                        }
+                    } else if (propType === 3) {
                         if (!classData[propName]) continue;
-                        if (meta.arrayIndex === 0xFFFFFFFF) { if (classData[propName]["[CLUMP]data"]) classData[propName]["[CLUMP]data"] = classData[propName]["[CLUMP]data"].map(v => this.resolveClumpString(v, bstNodeNames)); }
-                        else if (Array.isArray(classData[propName]) && meta.arrayIndex < classes.length) {
-                            let nestedClassName = classes[meta.arrayIndex].class_name; let nestedMeta = allClassesMeta[nestedClassName];
+                        if (arrIdx === 0xFFFFFFFF) {
+                            if (classData[propName]["[CLUMP]data"]) {
+                                classData[propName]["[CLUMP]data"] = classData[propName]["[CLUMP]data"].map(v => this.resolveClumpString(v, bstNodeNames));
+                            }
+                        } else if (Array.isArray(classData[propName]) && arrIdx < classes.length) {
+                            let nestedClassName = classes[arrIdx].class_name;
+                            let nestedMeta = allClassesMeta[nestedClassName];
                             if (!nestedMeta) continue;
-                            for (let elem of classData[propName]) this.resolveClumpRefs(elem, allClassesMeta, nestedMeta, classes, bstNodeNames);
+                            for (let elem of classData[propName]) {
+                                if (elem && typeof elem === 'object') {
+                                    this.resolveClumpRefs(elem, allClassesMeta, nestedMeta, classes, bstNodeNames);
+                                }
+                            }
                         }
                     }
                 }
             }
+
             resolveClumpString(value, bstNodeNames) {
                 if (value === "-nan" || value === "nan") return "-nan";
                 let idx = parseInt(value, 10);
@@ -368,7 +489,6 @@
         document.body.addEventListener('touchstart', initAudio, { once: true, passive: true });
         document.body.addEventListener('mousedown', initAudio, { once: true });
 
-        // 1. 本地 JSON 导入
         importBtn.addEventListener('click', () => { 
             if (importBtn.innerText.includes("正在解析")) return;
             playSound('tap'); fileInput.value = ''; fileInput.click(); 
@@ -400,7 +520,6 @@
             reader.readAsText(file);
         });
 
-        // 2. 原生应用读取
         importApkBtn.addEventListener('click', () => {
             playSound('tap');
             if (window.AndroidNative && window.AndroidNative.getInstalledApps) {
@@ -416,7 +535,6 @@
         function closeNativeAppModal() { nativeAppModal.classList.remove('show'); }
         function triggerFileUpload() { fallbackModal.classList.remove('show'); fileInput.value = ''; fileInput.click(); }
 
-        // 修复后的前端交互代码
         window.showNativeApps = function(apps) {
             if (!apps || apps.length === 0) return alert("未获取到应用");
             
@@ -439,15 +557,10 @@
                 
                 item.addEventListener('click', () => {
                     playSound('tap'); closeNativeAppModal();
-                    
-                    // 保存包名，用于后续切换地图
                     currentApkPath = app.packageName;
-
                     modalTitle.innerText = "读取地图中...";
                     appListContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#00ffaa;">正在扫描 APK (含分包) 地图...</div>`;
                     nativeAppModal.classList.add('show');
-                    
-                    // 传入包名给原生
                     window.AndroidNative.getApkLevels(currentApkPath);
                 });
                 
@@ -485,9 +598,7 @@
                 
                 item.addEventListener('click', () => {
                     playSound('tap'); closeNativeAppModal();
-                    
                     listContainer.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
-                    // 传 apkPath, entryName, levelName
                     window.AndroidNative.extractLevelData(level.apkPath, level.entryName, level.levelName);
                 });
                 fragment.appendChild(item);
