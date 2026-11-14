@@ -25,6 +25,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileWriter;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -147,7 +150,6 @@ public class MainActivity extends Activity {
             }).start();
         }
 
-        // 🔥 完全兼容分包及 assets 特殊路径的扫描
         @JavascriptInterface
         public void getApkLevels(String packageName) {
             new Thread(() -> {
@@ -170,7 +172,6 @@ public class MainActivity extends Activity {
                             String name = entry.getName();
                             String lowerName = name.toLowerCase();
                             
-                            // 精准特征匹配：兼容 /assets/Data/Levels/... 等各种异常路径
                             if (lowerName.contains("/levels/") && lowerName.endsWith("/objects.level.bin")) {
                                 String[] parts = name.split("/");
                                 String levelName = parts[parts.length - 2];
@@ -190,7 +191,7 @@ public class MainActivity extends Activity {
                     
                 } catch (Exception e) {
                     e.printStackTrace();
-                    final String errMsg = e.getMessage() != null ? e.getMessage() : "未知错误，可能是没有文件读取权限";
+                    final String errMsg = e.getMessage() != null ? e.getMessage() : "未知错误";
                     mainHandler.post(() -> webView.evaluateJavascript("javascript:alert('扫描 APK 失败: " + errMsg + "');", null));
                 }
             }).start();
@@ -228,6 +229,41 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, REQUEST_CODE_CREATE_DOCUMENT);
         }
 
+        // 🌟 新增：静默保存词典到本地
+        @JavascriptInterface
+        public void saveDictLocally(String jsonStr) {
+            try {
+                File file = new File(getFilesDir(), "online_dict.json");
+                FileWriter writer = new FileWriter(file);
+                writer.write(jsonStr);
+                writer.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        // 🌟 新增：读取本地词典
+        @JavascriptInterface
+        public String getLocalDict() {
+            try {
+                File file = new File(getFilesDir(), "online_dict.json");
+                if (!file.exists()) return "";
+                
+                FileInputStream fis = new FileInputStream(file);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = fis.read(buffer)) != -1) {
+                    baos.write(buffer, 0, read);
+                }
+                fis.close();
+                return baos.toString("UTF-8");
+            } catch (Exception e) {
+                e.printStackTrace();
+                return "";
+            }
+        }
+
         private Bitmap drawableToBitmap(Drawable drawable) {
             if (drawable instanceof BitmapDrawable) return ((BitmapDrawable) drawable).getBitmap();
             Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
@@ -237,4 +273,4 @@ public class MainActivity extends Activity {
             return bitmap;
         }
     }
-            }
+                    }
