@@ -96,7 +96,7 @@ public class MainActivity extends Activity {
                     if (os != null && pendingJsonContent != null) {
                         os.write(pendingJsonContent.getBytes(StandardCharsets.UTF_8));
                         os.close();
-                        mainHandler.post(() -> webView.evaluateJavascript("javascript:alert('JSON 保存成功！');", null));
+                        mainHandler.post(() -> webView.evaluateJavascript("javascript:alert('JSON 导出成功！');", null));
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -110,6 +110,7 @@ public class MainActivity extends Activity {
     }
 
     public class NativeBridge {
+        // 1. 获取应用列表 (极速版，不转图标)
         @JavascriptInterface
         public void getInstalledApps() {
             new Thread(() -> {
@@ -125,16 +126,7 @@ public class MainActivity extends Activity {
                         JSONObject appObj = new JSONObject();
                         appObj.put("appName", pm.getApplicationLabel(appInfo).toString());
                         appObj.put("packageName", pkg.packageName);
-
-                        try {
-                            Drawable icon = pm.getApplicationIcon(pkg.packageName);
-                            Bitmap bitmap = drawableToBitmap(icon);
-                            ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
-                            appObj.put("icon", "data:image/png;base64," + Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP));
-                        } catch (Exception e) {
-                            appObj.put("icon", "");
-                        }
+                        appObj.put("apkPath", appInfo.sourceDir);
                         jsonArray.put(appObj);
                     }
                     mainHandler.post(() -> webView.evaluateJavascript("javascript:showNativeApps(" + jsonArray.toString() + ")", null));
@@ -142,53 +134,54 @@ public class MainActivity extends Activity {
             }).start();
         }
 
+        // 2. 懒加载：获取指定应用的图标
         @JavascriptInterface
-        public void getApkLevels(String packageName) {
+        public void getAppIcon(String packageName, String callbackId) {
+            new Thread(() -> {
+                try {
+                    PackageManager pm = getPackageManager();
+                    Drawable icon = pm.getApplicationIcon(packageName);
+                    Bitmap bitmap = drawableToBitmap(icon);
+                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+                    String iconBase64 = "data:image/png;base64," + Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP);
+                    
+                    mainHandler.post(() -> webView.evaluateJavascript("javascript:receiveAppIcon('" + callbackId + "', '" + iconBase64 + "')", null));
+                } catch (Exception e) { e.printStackTrace(); }
+            }).start();
+        }
+
+        // 3. 扫描指定 APK 下的所有关卡
+        @JavascriptInterface
+        public void getApkLevels(String apkPath) {
             new Thread(() -> {
                 try {
                     JSONArray levelsArray = new JSONArray();
-                    PackageManager pm = getPackageManager();
-                    ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
+                    ZipFile zipFile = new ZipFile(apkPath);
+                    Enumeration<? extends ZipEntry> entries = zipFile.entries();
                     
-                    java.util.List<String> apkPaths = new java.util.ArrayList<>();
-                    apkPaths.add(appInfo.sourceDir);
-                    if (appInfo.splitSourceDirs != null) {
-                        for (String split : appInfo.splitSourceDirs) apkPaths.add(split);
-                    }
-
-                    for (String apkPath : apkPaths) {
-                        ZipFile zipFile = new ZipFile(apkPath);
-                        Enumeration<? extends ZipEntry> entries = zipFile.entries();
-                        while (entries.hasMoreElements()) {
-                            ZipEntry entry = entries.nextElement();
-                            String name = entry.getName();
-                            String lowerName = name.toLowerCase();
-                            
-                            if (lowerName.contains("/levels/") && lowerName.endsWith("/objects.level.bin")) {
-                                String[] parts = name.split("/");
-                                String levelName = "";
-                                for (int i = 0; i < parts.length; i++) {
-                                    if (parts[i].equalsIgnoreCase("levels") && i + 1 < parts.length) {
-                                        levelName = parts[i + 1];
-                                        break;
-                                    }
-                                }
-                                if (!levelName.isEmpty()) {
-                                    JSONObject levelObj = new JSONObject();
-                                    levelObj.put("levelName", levelName);
-                                    levelObj.put("entryName", name);
-                                    levelObj.put("apkPath", apkPath);
-                                    levelsArray.put(levelObj);
-                                }
-                            }
+                    while (entries.hasMoreElements()) {
+                        ZipEntry entry = entries.nextElement();
+                        String name = entry.getName();
+                        String lowerName = name.toLowerCase();
+                        
+                        if (lowerName.startsWith("data/levels/") && lowerName.endsWith("/objects.level.bin")) {
+                            String[] parts = name.split("/");
+                            String levelName = parts[parts.length - 2];
+                            JSONObject levelObj = new JSONObject();
+                            levelObj.put("levelName", levelName);
+                            levelObj.put("entryName", name);
+                            levelsArray.put(levelObj);
                         }
-                        zipFile.close();
                     }
+                    zipFile.close();
+
                     mainHandler.post(() -> webView.evaluateJavascript("javascript:showApkLevels(" + levelsArray.toString() + ")", null));
                 } catch (Exception e) { e.printStackTrace(); }
             }).start();
         }
 
+        // 4. 精准提取单张地图的 bin 数据
         @JavascriptInterface
         public void extractLevelData(String apkPath, String entryName, String levelName) {
             new Thread(() -> {
@@ -211,7 +204,6 @@ public class MainActivity extends Activity {
             }).start();
         }
 
-        // 🌟 新增：原生文件导出支持
         @JavascriptInterface
         public void exportJson(String fileName, String jsonContent) {
             pendingJsonContent = jsonContent;
@@ -231,4 +223,4 @@ public class MainActivity extends Activity {
             return bitmap;
         }
     }
-    }
+}
