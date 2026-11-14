@@ -27,12 +27,14 @@
             user-select: none; display: flex; flex-direction: column; transform: translate3d(0, 0, 0); -webkit-overflow-scrolling: touch;
         }
 
+        /* 极光背景 */
         .aurora-bg { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0.4; }
         .aurora-blob { position: absolute; border-radius: 50%; filter: blur(40px); animation: float 20s infinite alternate ease-in-out; will-change: transform; transform: translate3d(0, 0, 0); }
         .blob-1 { width: 200px; height: 200px; background: #00ffaa; top: -5%; left: -5%; }
         .blob-2 { width: 250px; height: 250px; background: #3a66ff; bottom: 5%; right: -10%; animation-delay: -7s; }
         @keyframes float { 0% { transform: translate3d(0, 0, 0) scale(1); } 100% { transform: translate3d(40px, 60px, 0) scale(1.1); } }
 
+        /* 顶部操作区 */
         .top-bar { flex-shrink: 0; padding: 15px 15px 10px 15px; padding-top: max(15px, env(safe-area-inset-top)); z-index: 10; display: flex; flex-direction: column; gap: 10px; }
         .btn-import {
             width: 100%; background: linear-gradient(135deg, #3a66ff, #6a33ff); color: white; border: none;
@@ -47,6 +49,7 @@
         .btn-action { flex: 1; background: linear-gradient(135deg, #ff4466, #ff8844); color: white; border: none; padding: 12px; font-size: 14px; font-weight: bold; border-radius: var(--border-radius); cursor: pointer; }
         .btn-export { background: linear-gradient(135deg, #f59e0b, #eab308); color: #000; }
 
+        /* 列表区 */
         .list-container { flex: 1; overflow-y: auto; padding: 0 15px 10px 15px; position: relative; }
         .card {
             background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: var(--border-radius);
@@ -70,6 +73,7 @@
         .card-coord { font-size: 13px; font-family: monospace; color: #888; background: rgba(0, 0, 0, 0.3); padding: 8px 12px; border-radius: 8px; display: inline-block; letter-spacing: 0.5px; }
         .card-coord span { color: #fff; font-weight: 600; }
 
+        /* 搜索与 Tab */
         .search-bar { flex-shrink: 0; padding: 0 15px 10px 15px; display: none; }
         .search-input-wrap { background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--border-radius); display: flex; align-items: center; padding: 0 15px; transition: border-color 0.2s; }
         .search-input-wrap:focus-within { border-color: var(--btn-blue); }
@@ -82,6 +86,7 @@
         .tab-btn.active-avail { background: rgba(0, 255, 170, 0.1); color: var(--accent-green); border-color: rgba(0, 255, 170, 0.2); }
         .tab-btn.active-dis { background: rgba(255, 68, 102, 0.1); color: var(--accent-red); border-color: rgba(255, 68, 102, 0.2); }
 
+        /* 弹窗动画 */
         .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background: rgba(40, 40, 50, 0.95); color: white; padding: 16px 32px; border-radius: 40px; font-size: 16px; font-weight: bold; opacity: 0; pointer-events: none; transition: 0.2s; z-index: 999; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
         .toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
@@ -92,6 +97,7 @@
         .skeleton::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent); animation: shimmer 1.2s infinite; transform: translate3d(-100%, 0, 0); }
         @keyframes shimmer { 100% { transform: translate3d(100%, 0, 0); } }
 
+        /* 原生选择器 */
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: none; align-items: flex-start; justify-content: center; }
         .modal-overlay.show { display: flex; }
         .app-selector { background: #121212; width: 100%; height: 100%; display: flex; flex-direction: column; }
@@ -101,7 +107,6 @@
         .app-list { flex: 1; overflow-y: auto; background: #000; }
         .app-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #222; cursor: pointer; }
         .app-item:active { background: #1a1a1a; }
-        /* 图标懒加载的占位样式 */
         .app-icon { width: 45px; height: 45px; border-radius: 8px; background: rgba(255,255,255,0.05); object-fit: cover; margin-right: 15px; }
         .app-info { display: flex; flex-direction: column; }
         .app-name { color: #fff; font-size: 16px; font-weight: bold; margin-bottom: 4px; }
@@ -338,7 +343,7 @@
         let currentTab = 'enabled';
         let currentJsonData = null; 
         let currentLevelName = "";
-        let currentApkPath = ""; // 当前选中的应用路径
+        let currentApkPath = ""; 
 
         const importBtn = document.getElementById('importBtn');
         const fileInput = document.getElementById('fileInput');
@@ -359,9 +364,6 @@
         const appListContainer = document.getElementById('appList');
         const fallbackModal = document.getElementById('fallbackModal');
         const modalTitle = document.getElementById('modalTitle');
-
-        // 全局用于接收图标的缓存
-        const iconCallbacks = {};
 
         document.body.addEventListener('touchstart', initAudio, { once: true, passive: true });
         document.body.addEventListener('mousedown', initAudio, { once: true });
@@ -398,7 +400,7 @@
             reader.readAsText(file);
         });
 
-        // 2. 读取应用列表
+        // 2. 原生应用读取
         importApkBtn.addEventListener('click', () => {
             playSound('tap');
             if (window.AndroidNative && window.AndroidNative.getInstalledApps) {
@@ -414,14 +416,12 @@
         function closeNativeAppModal() { nativeAppModal.classList.remove('show'); }
         function triggerFileUpload() { fallbackModal.classList.remove('show'); fileInput.value = ''; fileInput.click(); }
 
-        // 原生回调：接收到应用列表
+        // 修复后的前端交互代码
         window.showNativeApps = function(apps) {
             if (!apps || apps.length === 0) return alert("未获取到应用");
             
             modalTitle.innerText = "选择应用";
             appListContainer.innerHTML = "";
-            
-            // 用 DocumentFragment 优化 DOM 渲染
             const fragment = document.createDocumentFragment();
             
             apps.forEach((app, index) => {
@@ -437,40 +437,38 @@
                     </div>
                 `;
                 
-                // 添加点击事件
                 item.addEventListener('click', () => {
                     playSound('tap'); closeNativeAppModal();
-                    currentApkPath = app.apkPath;
                     
+                    // 保存包名，用于后续切换地图
+                    currentApkPath = app.packageName;
+
                     modalTitle.innerText = "读取地图中...";
-                    appListContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#00ffaa;">正在扫描 APK 内地图文件...</div>`;
+                    appListContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#00ffaa;">正在扫描 APK (含分包) 地图...</div>`;
                     nativeAppModal.classList.add('show');
                     
-                    // 向原生请求扫描这个 APK 的关卡
-                    window.AndroidNative.getApkLevels(app.apkPath);
+                    // 传入包名给原生
+                    window.AndroidNative.getApkLevels(currentApkPath);
                 });
                 
                 fragment.appendChild(item);
 
-                // 通知原生去获取这个应用的图标（懒加载）
                 setTimeout(() => {
                     window.AndroidNative.getAppIcon(app.packageName, iconId);
-                }, index * 20); // 错开请求，避免瞬间阻塞
+                }, index * 20);
             });
 
             appListContainer.appendChild(fragment);
         };
 
-        // 原生回调：接收到单个图标
         window.receiveAppIcon = function(iconId, base64Data) {
             const img = document.getElementById(iconId);
             if (img) img.src = base64Data;
         };
 
-        // 原生回调：接收到 APK 关卡列表
         window.showApkLevels = function(levels) {
             if (!levels || levels.length === 0) {
-                appListContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#ff4466;">该应用内未找到任何地图文件</div>`;
+                appListContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#ff4466;">该应用内未找到任何地图文件 (Objects.level.bin)</div>`;
                 return;
             }
             
@@ -489,8 +487,8 @@
                     playSound('tap'); closeNativeAppModal();
                     
                     listContainer.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
-                    // 只提取并解析选中的这唯一一个 bin 文件
-                    window.AndroidNative.extractLevelData(currentApkPath, level.entryName, level.levelName);
+                    // 传 apkPath, entryName, levelName
+                    window.AndroidNative.extractLevelData(level.apkPath, level.entryName, level.levelName);
                 });
                 fragment.appendChild(item);
             });
@@ -498,7 +496,6 @@
             appListContainer.appendChild(fragment);
         };
 
-        // 3. 原生回调：接收到单张地图的 bin 数据 (Base64)
         window.loadLevelData = function(base64Data, levelName) {
             try {
                 const binaryString = window.atob(base64Data);
@@ -506,14 +503,12 @@
                 const bytes = new Uint8Array(len);
                 for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
 
-                // 解析！
                 const parser = new SkyBinaryParser(bytes.buffer);
                 const jsonData = parser.parse();
                 
                 currentJsonData = jsonData;
                 currentLevelName = levelName;
                 
-                // 显示切换地图按钮（因为是通过 APK 进来的）
                 switchMapBtn.style.display = "block"; 
                 actionBar.style.display = "flex";
 
@@ -528,12 +523,11 @@
             }
         };
 
-        // 4. 事件绑定
         switchMapBtn.addEventListener('click', () => {
             playSound('tap');
             if (currentApkPath) {
                 modalTitle.innerText = "读取地图中...";
-                appListContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#00ffaa;">正在扫描 APK 内地图文件...</div>`;
+                appListContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#00ffaa;">正在扫描 APK (含分包) 地图...</div>`;
                 nativeAppModal.classList.add('show');
                 window.AndroidNative.getApkLevels(currentApkPath);
             } else {
@@ -559,7 +553,6 @@
             }
         });
 
-        // 5. 纯正原版数据提取
         function processData(data) { 
             parsedData.enabled = [];
             parsedData.disabled = [];
