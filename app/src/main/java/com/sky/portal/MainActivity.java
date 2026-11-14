@@ -229,7 +229,7 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, REQUEST_CODE_CREATE_DOCUMENT);
         }
 
-        // 🌟 新增：静默保存词典到本地
+        // 保存词典
         @JavascriptInterface
         public void saveDictLocally(String jsonStr) {
             try {
@@ -237,12 +237,10 @@ public class MainActivity extends Activity {
                 FileWriter writer = new FileWriter(file);
                 writer.write(jsonStr);
                 writer.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            } catch (Exception e) { e.printStackTrace(); }
         }
 
-        // 🌟 新增：读取本地词典
+        // 读取词典
         @JavascriptInterface
         public String getLocalDict() {
             try {
@@ -253,14 +251,24 @@ public class MainActivity extends Activity {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 byte[] buffer = new byte[8192];
                 int read;
-                while ((read = fis.read(buffer)) != -1) {
-                    baos.write(buffer, 0, read);
-                }
+                while ((read = fis.read(buffer)) != -1) baos.write(buffer, 0, read);
                 fis.close();
                 return baos.toString("UTF-8");
             } catch (Exception e) {
                 e.printStackTrace();
                 return "";
+            }
+        }
+
+        // 🌟 新增：打开系统浏览器用于下载更新
+        @JavascriptInterface
+        public void openBrowser(String url) {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getApplicationContext().startActivity(intent);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
 
